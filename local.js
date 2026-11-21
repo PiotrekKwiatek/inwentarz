@@ -1,7 +1,7 @@
 // Inwentarz hufca: wersja testowa, w której każdy ma własną kopię danych w swojej przeglądarce.
 // Podstawia pod aplikację to samo API bazy, które ma w Claude (collection/doc/where/orderBy/limit/onSnapshot).
 (() => {
-  const IDB = "inwentarz-test", KEY = "db", NAME_KEY = "inw-test-name";
+  const IDB = "inwentarz-test", KEY = "db", NAME_KEY = "inw-test-seen";
   const store = {};                       // path -> document
   const subs = new Set();
   const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
@@ -63,7 +63,7 @@
 
   /* ---------- użytkownik ---------- */
   const ME = "tester";
-  const myName = () => { try { return (localStorage.getItem(NAME_KEY) || "").trim(); } catch (_){ return ""; } };
+  const myName = () => "Tester";
   const user = {
     me:async () => ({id:ME, name:myName() || "Tester"}),
     id:async () => ME, can:async () => true, canEdit:async () => true, isOwner:async () => true,
@@ -106,15 +106,14 @@
   }
 
   /* ---------- start ---------- */
-  const gate = () => document.getElementById("inw-gate");
-  const initials = n => (n || "T").split(/\s+/).map(w => w[0] || "").join("").slice(0, 2).toUpperCase() || "T";
-  function showAcct(){ const ab = document.getElementById("acct-btn"); if (ab){ ab.hidden = false; ab.textContent = initials(myName() || "Tester"); ab.title = myName() || "Tester"; } }
+  function showAcct(){ const ab = document.getElementById("acct-btn"); if (ab){ ab.hidden = false; ab.textContent = "Test"; ab.title = "Wersja testowa"; ab.setAttribute("aria-label", "Wersja testowa: informacje i powrót do danych przykładowych"); } }
   let started = false;
   async function start(){
     if (started) return; started = true;
-    const g = gate(); if (g) g.hidden = true; document.body.classList.remove("gated");
     showAcct();
     window.__inwResolve({db, user, assets, downloads});
+    let first = false; try { first = !localStorage.getItem(NAME_KEY); localStorage.setItem(NAME_KEY, "1"); } catch (_){}
+    if (first) setTimeout(() => { if (typeof toast === "function") toast("Wersja testowa: dane są przykładowe, a Twoje zmiany widzisz tylko Ty. Śmiało klikaj."); }, 1200);
   }
   async function boot(){
     idb = await openIdb();
@@ -122,26 +121,17 @@
     if (!saved){ try { saved = JSON.parse(localStorage.getItem("inw-test-db") || "null"); } catch (_){ saved = null; } }
     if (saved && isPlain(saved) && Object.keys(saved).length) Object.assign(store, saved);
     else { try { await seed(); persist(); } catch (e){ console.warn("demo", e); } }
-    const g = gate(), inp = document.getElementById("inw-name"), go = document.getElementById("inw-go");
-    if (myName() || !g){ start(); return; }
-    g.hidden = false; document.body.classList.add("gated");
-    const enter = () => { try { localStorage.setItem(NAME_KEY, (inp && inp.value.trim()) || "Tester"); } catch (_){} start(); };
-    if (go) go.addEventListener("click", enter);
-    if (inp) inp.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); enter(); } });
+    start();
   }
 
   /* ---------- konto: imię i powrót do danych przykładowych ---------- */
-  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
   window.INW_ACCT = () => {
     if (typeof openSheet !== "function") return;
-    openSheet("Wersja testowa", `<form class="f" novalidate>
-      <p class="hint">Twoje zmiany zapisują się tylko w tej przeglądarce. Inni testujący ich nie widzą, a Ty nie widzisz ich zmian.</p>
-      <div class="field"><label for="inw-n2">Twoje imię <span class="opt">(widać je w historii)</span></label><input id="inw-n2" maxlength="40" value="${esc(myName())}" placeholder="np. Piotr"></div>
-      <div class="form-actions"><button type="button" class="btn btn-ghost btn-danger" data-act="inw-reset">Zacznij od nowa</button><span class="spacer"></span><button type="button" class="btn" data-act="close-sheet">Zamknij</button><button type="submit" class="btn btn-primary">Zapisz</button></div>
-    </form>`, w => {
-      const f = w.querySelector("form");
-      f.addEventListener("submit", e => { e.preventDefault(); try { localStorage.setItem(NAME_KEY, w.querySelector("#inw-n2").value.trim() || "Tester"); } catch (_){} location.reload(); });
-    }, {noFocus:true});
+    openSheet("Wersja testowa", `<div class="f">
+      <p class="lead">Dane są przykładowe. Twoje zmiany zapisują się tylko w tej przeglądarce: inni testujący ich nie widzą, a Ty nie widzisz ich zmian.</p>
+      <p class="hint">„Zacznij od nowa” usuwa Twoje zmiany i przywraca dane przykładowe.</p>
+      <div class="form-actions"><button type="button" class="btn btn-ghost btn-danger" data-act="inw-reset">Zacznij od nowa</button><span class="spacer"></span><button type="button" class="btn btn-primary" data-act="close-sheet">Zamknij</button></div>
+    </div>`, null, {noFocus:true});
   };
   window.INW_RESET = async () => {
     if (!confirm("Usunąć wszystkie Twoje zmiany i wrócić do danych przykładowych?")) return;
