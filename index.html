@@ -10,6 +10,8 @@
 .inw-card .small{font-size:13px;color:var(--ink-3)}
 #inw-login{justify-self:center;min-height:48px;padding:0 20px;display:inline-flex;align-items:center;gap:10px;font-size:16px}
 #inw-login svg{width:20px;height:20px}
+.inw-name-f{text-align:left}
+#inw-go{justify-self:center;min-height:48px;padding:0 28px;font-size:16px}
 #inw-gate-msg{min-height:1.3em;font-size:14px;color:var(--ink-2)}
 #inw-gate-msg.err{color:var(--late)}
 body.gated{overflow:hidden}
@@ -21,18 +23,18 @@ window.__inwReady = new Promise(function(r){ window.__inwResolve = r; });
 window.claude = {use: function(n){ return window.__inwReady.then(function(a){ return a[n] || null; }); }};
 window.INW_BLOB = window.INW_BLOB || function(){ return ""; };
 </script>
-<script type="module" src="./fb.js"></script>
-</head><body class="gated">
-<div id="inw-gate"><div class="inw-card">
+<script src="./local.js"></script>
+</head><body>
+<div id="inw-gate" hidden><div class="inw-card">
   <div class="inw-mark">QR</div>
   <span class="tag">Wersja testowa</span>
   <h1>Inwentarz hufca</h1>
   <p>Spis sprzętu, wypożyczenia i zwroty. Dane są przykładowe, więc śmiało klikaj, wypożyczaj i oddawaj.</p>
-  <button type="button" class="btn btn-primary" id="inw-login"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.35 11.1H12v2.98h5.35c-.23 1.4-1.66 4.1-5.35 4.1-3.22 0-5.85-2.67-5.85-5.96S8.78 6.26 12 6.26c1.83 0 3.06.78 3.76 1.45l2.56-2.47C16.68 3.71 14.54 2.8 12 2.8 6.92 2.8 2.8 6.92 2.8 12s4.12 9.2 9.2 9.2c5.31 0 8.83-3.73 8.83-8.99 0-.6-.07-1.06-.15-1.51z"/></svg><span>Zaloguj się przez Google</span></button>
-  <div id="inw-gate-msg" role="status" aria-live="polite"></div>
-  <p class="small">Logowanie jest po to, żeby w historii było widać, kto co zrobił. Aplikacja widzi tylko Twoje imię.</p>
+  <p class="small">Wszystko zapisuje się tylko w Twojej przeglądarce. Inni testujący nie widzą Twoich zmian.</p>
+  <div class="field inw-name-f"><label for="inw-name">Jak masz na imię? <span class="opt">(widać je w historii)</span></label><input id="inw-name" maxlength="40" placeholder="np. Piotr" autocomplete="given-name"></div>
+  <button type="button" class="btn btn-primary" id="inw-go"><span>Zaczynamy</span></button>
 </div></div>
-<title>Inwentarz hufca (test)</title>
+<title>Inwentarz hufca (wersja testowa)</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("inw-theme")||"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2810,6 +2812,7 @@ document.addEventListener("click", e => {
     case "inw-acct": if (window.INW_ACCT) window.INW_ACCT(); break;
     case "inw-seed": if (window.INW_SEED) window.INW_SEED(b); break;
     case "inw-signout": if (window.INW_SIGNOUT) window.INW_SIGNOUT(); break;
+    case "inw-reset": if (window.INW_RESET) window.INW_RESET(); break;
     case "loan-show": loanShow(id); break;
     case "loan-edit": loanEdit(id); break;
     case "loan-extend": loanExtend(b.dataset.ids); break;

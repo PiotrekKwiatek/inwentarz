@@ -1,13 +1,10 @@
 # Inwentarz hufca (wersja testowa)
 
-Spis sprzętu Karkonoskiego Hufca ZHP: pomieszczenia, pudła i rzeczy z kodami QR, wypożyczenia, zwroty, historia zmian.
-To wersja do testów, z przykładowymi danymi.
+Spis sprzętu Karkonoskiego Hufca ZHP: pomieszczenia, pudła i rzeczy z kodami QR, wypożyczenia, zwroty i historia zmian.
 
-- Strona: GitHub Pages (ten katalog).
-- Baza i logowanie: Firebase (Firestore + logowanie kontem Google).
-- `config.js` – ustawienia projektu Firebase (nie są tajne, dostępu pilnują reguły i logowanie).
-- `firestore.rules` – reguły dostępu do wklejenia w konsoli Firebase (Firestore → Rules).
-- `demo.json` – przykładowe dane, wczytywane przyciskiem w pustej aplikacji.
-- `vendor/` – biblioteka Firebase 13.4.0, trzymana tutaj, żeby strona nie zależała od zewnętrznych serwerów.
+To wersja do testów: każdy, kto otworzy stronę, dostaje własną kopię przykładowych danych zapisaną w swojej przeglądarce.
+Zmiany jednej osoby nie są widoczne dla innych. „Zacznij od nowa” (przycisk z inicjałami w prawym górnym rogu) przywraca dane przykładowe.
 
-Aplikacja powstaje jako prototyp w Claude. `index.html` jest z niego budowany automatycznie, więc nie warto go poprawiać ręcznie.
+- `index.html` – aplikacja, budowana automatycznie z prototypu w Claude, więc nie warto jej poprawiać ręcznie.
+- `local.js` – zapis danych w przeglądarce (IndexedDB) zamiast wspólnej bazy.
+- `demo.json` – przykładowe dane, daty liczone od dnia otwarcia.
