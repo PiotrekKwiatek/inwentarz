@@ -7,7 +7,7 @@
   var isAdmin = function(){ return role() === "admin"; };
   var isStaff = function(){ return role() === "admin" || role() === "biuro"; };
   var ROLE_LBL = {admin:"admin", biuro:"biuro hufca", druzynowy:"drużynowy / instruktor"};
-  var DSTATUS = {nowy:["warn", "czeka na biuro"], zaplanowany:["lent", "przyjęty"], wydany:["ok", "wydany"], odrzucony:["late", "odrzucony"], anulowany:["mute", "anulowany"]};
+  var DSTATUS = {nowy:["warn", "czeka na biuro"], zaplanowany:["lent", "przyjęty"], wydany:["ok", "wydany"], czesciowo:["lent", "część oddana"], zwrocony:["mute", "zwrócony"], odrzucony:["late", "odrzucony"], anulowany:["mute", "anulowany"]};
 
   S.cat = {}; S.myreq = []; S.roles = new Map(); S.access = []; S.usersList = []; S.dOnlyAvail = false; S.uq = "";
   S.dcart = (function(){ try { var v = JSON.parse(localStorage.getItem("inwh-dcart") || "[]"); return Array.isArray(v) ? v.filter(function(x){ return x && typeof x.itemId === "string"; }) : []; } catch (_){ return []; } })();
@@ -141,13 +141,42 @@
     try { await S.db.doc("public/catalog").set({items:next, at:now()}); } catch (e){ console.warn("katalog", e); }
     catBusy = false;
   }
+  /* ---------- status wniosku nadąża za tym, co dzieje się z rzeczami (23.11) ----------
+     zaplanowany → wydany → częściowo zwrócony → zwrócony; cofnięcie zwrotu cofa też status.
+     Wniosek łączy się z wypożyczeniami przez reqId (nowe) albo przez planId (starsze). */
+  var reqT = 0, reqBusy = false;
+  function scheduleReqSync(){ if (!isStaff()) return; clearTimeout(reqT); reqT = setTimeout(syncRequests, 1500); }
+  async function syncRequests(){
+    if (!isStaff() || reqBusy || !S.db || !S.got.requests || !S.got.loans || !S.got.active || !S.got.plans) return;
+    var cut = cutoffDate().toISOString(), ups = [];
+    S.requests.forEach(function(r){
+      var st = r.status || "nowy";
+      if (["zaplanowany", "wydany", "czesciowo", "zwrocony"].indexOf(st) < 0) return;
+      // starsze wypożyczenia mogą nie być wczytane (ostatnie 3 miesiące), więc ich nie oceniamy
+      if (!S.histFull && r.issuedAt && r.issuedAt < cut) return;
+      var L = S.loans.filter(function(l){ return l.reqId === r.id || (r.planId && l.planId === r.planId); });
+      var planned = S.plans.some(function(p){ return p.requestId === r.id || (r.planId && p.id === r.planId); });
+      var next, extra = {};
+      if (L.length){
+        var open = L.filter(function(l){ return l.open; }).length;
+        next = open === L.length ? "wydany" : open === 0 ? "zwrocony" : "czesciowo";
+        if (next === "zwrocony") extra.returnedAt = L.reduce(function(m, l){ return String(l.back || "") > m ? String(l.back) : m; }, "") || now();
+      } else if (planned) next = "zaplanowany";
+      else return;
+      if (next !== st) ups.push([r.id, Object.assign({status:next, updatedAt:now()}, extra)]);
+    });
+    if (!ups.length) return;
+    reqBusy = true;
+    for (var k = 0; k < ups.length; k++){ try { await S.db.doc("requests/" + ups[k][0]).update(ups[k][1]); } catch (e){ console.warn("wniosek", e); } }
+    reqBusy = false;
+  }
   // odśwież widok, chyba że ktoś właśnie pisze w polu tekstowym (przełączniki i listy wyboru nie blokują odświeżania)
   scheduleRender = function(){
     var a = document.activeElement, m = $("#main");
     var typing = a && m && m.contains(a) && (a.matches("textarea") || (a.matches("input") && !/^(checkbox|radio|button|submit|file|range|color)$/i.test(a.type || "")));
     if (typing) S.pendingRender = true;
     else { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(render); }
-    scheduleCatalogSync();
+    scheduleCatalogSync(); scheduleReqSync();
   };
 
   /* ---------- podmiany wspólnych elementów ---------- */
@@ -349,6 +378,8 @@
       var info = [];
       if (r.status === "zaplanowany") info.push("Przyjęty. Odbiór: " + fmtYMD(r.plannedPickup || r.from) + ((r.plannedDue || r.to) ? ", zwrot do " + fmtYMD(r.plannedDue || r.to) : "") + ".");
       if (r.status === "wydany") info.push("Sprzęt wydany" + (r.issuedAt ? " " + fmtDate(r.issuedAt) : "") + ".");
+      if (r.status === "czesciowo") info.push("Sprzęt wydany" + (r.issuedAt ? " " + fmtDate(r.issuedAt) : "") + ". Część już wróciła do magazynu, reszta jest jeszcze u Was.");
+      if (r.status === "zwrocony") info.push("Wszystko wróciło do magazynu" + (r.returnedAt ? " " + fmtDate(r.returnedAt) : "") + ". Dziękujemy!");
       if (r.status === "odrzucony") info.push("Biuro odrzuciło wniosek." + (r.reason ? " Powód: " + r.reason : ""));
       if (r.status === "nowy" || !r.status) info.push("Biuro hufca jeszcze go nie rozpatrzyło.");
       return '<section class="grp"><div class="grp-head"><div class="grp-who"><div class="who-big">' + esc(r.personal ? PERSONAL : (r.unit || "")) + '</div><p class="meta">' + esc(["termin " + rangeTxt(r.from, r.to), r.purpose ? "cel: " + r.purpose : "", r.at ? "wysłany " + fmtDate(r.at) : ""].filter(Boolean).join(" · ")) + '</p></div><span class="chip ' + st[0] + '">' + st[1] + '</span></div>'

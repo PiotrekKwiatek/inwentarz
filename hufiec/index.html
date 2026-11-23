@@ -1896,7 +1896,7 @@ function openLend(list, opt = {}){
         const i = S.items.get(r.itemId), n = qtyOf(i) > 1 ? r.qty : 1, parts = normParts(i.parts);
         const partsOut = parts.filter((p, j) => !r.off.has(j)), partsMissing = parts.filter((p, j) => r.off.has(j));
         const lid = rid();
-        await retry(() => S.db.doc("loans/" + lid).set({itemId:i.id, itemName:i.name, qty:n, unit, personal, to, toUser:null, email, purpose, useFrom, useTo, due, note, out:t, outBy:S.me.id, partsOut, partsMissing, open:true, back:null, backBy:null, backNote:"", batch, fromRoomId:i.roomId || null, fromBoxId:i.boxId || null, planId:opt.plan ? opt.plan.id : null}));
+        await retry(() => S.db.doc("loans/" + lid).set({itemId:i.id, itemName:i.name, qty:n, unit, personal, to, toUser:null, email, purpose, useFrom, useTo, due, note, out:t, outBy:S.me.id, partsOut, partsMissing, open:true, back:null, backBy:null, backNote:"", batch, fromRoomId:i.roomId || null, fromBoxId:i.boxId || null, planId:opt.plan ? opt.plan.id : null, reqId:(opt.plan && opt.plan.requestId) || (R ? R.id : null)}));
         if (r.label !== (i.label === true)) await retry(() => S.db.doc("items/" + i.id).update({label:r.label, updatedAt:t, updatedBy:S.me.id}));
         logEv("out", `Wydano: ${i.name}${n > 1 ? ` ×${n}` : ""}`, {at:t, item:i.id, loan:lid, unit:uTxt, d:[whoU, purpose ? `cel: ${purpose}` : "", datesTxt({useTo, due}), partsMissing.length ? `wydano bez: ${partsTxt(partsMissing)}` : "", opt.plan ? "z zaplanowanego wydania" : "", note ? `uwagi: ${note}` : ""].filter(Boolean).join(" · ")});
       }
@@ -2106,17 +2106,18 @@ function planMail(id){
   mailSheet("Potwierdzenie wydania", p.email || "", "Sprzęt z magazynu hufca: potwierdzenie", `Cześć${first ? ` ${first}` : ""},\n\npotwierdzamy wydanie sprzętu z magazynu hufca${p.unit ? ` dla jednostki ${p.unit}` : ""}${p.purpose ? ` (${p.purpose})` : ""}:\n${lines}\n\nOdbiór: ${fmtYMD(p.pickup)}${p.due ? `\nZwrot do: ${fmtYMD(p.due)}` : ""}\n\nCzuwaj!`);
 }
 function viewRequests(){
-  const order = {nowy:0, zaplanowany:1, wydany:2, odrzucony:3};
-  const rs = S.requests.slice().sort((a, b) => (order[a.status || "nowy"] - order[b.status || "nowy"]) || String(b.at || "").localeCompare(String(a.at || "")));
+  const order = {nowy:0, zaplanowany:1, wydany:2, czesciowo:2, zwrocony:3, odrzucony:4, anulowany:5};
+  const rs = S.requests.slice().sort((a, b) => ((order[a.status || "nowy"] ?? 9) - (order[b.status || "nowy"] ?? 9)) || String(b.at || "").localeCompare(String(a.at || "")));
   const open = rs.filter(r => ["nowy", "zaplanowany"].includes(r.status || "nowy")), done = rs.filter(r => !open.includes(r));
   const top = `<p class="hint">Wnioski drużynowych z aplikacji. Z każdego zaplanujesz wydanie albo wydasz od razu. Odrzucenie z powodem zobaczy osoba, która wysłała wniosek.</p>`;
   if (!rs.length) return `${top}<div class="empty"><h2>Brak wniosków</h2><p>Gdy drużynowy wyśle wniosek z aplikacji, pojawi się tutaj.</p></div>`;
   return `${top}${open.map(reqCard).join("") || `<p class="muted">Wszystkie wnioski są załatwione.</p>`}${done.length ? `<details class="done-d"><summary>Załatwione (${done.length})</summary><div class="done-list">${done.map(reqCard).join("")}</div></details>` : ""}`;
 }
 function reqCard(r){
-  const st = r.status || "nowy", cls = {nowy:"warn", zaplanowany:"lent", wydany:"ok", odrzucony:"mute"}[st] || "mute";
+  const st = r.status || "nowy", cls = {nowy:"warn", zaplanowany:"lent", wydany:"ok", czesciowo:"lent", zwrocony:"mute", odrzucony:"mute"}[st] || "mute";
+  const stTxt = {czesciowo:"częściowo zwrócony", zwrocony:"zwrócony"}[st] || st;
   return `<section class="grp">
-    <div class="grp-head"><div class="grp-who"><div class="who-big">${esc(r.name || "bez nazwiska")}</div><p class="meta">${[r.unit, r.email, r.phone].filter(Boolean).map(esc).join(" · ")}</p></div><span class="chip ${cls}">${st}</span></div>
+    <div class="grp-head"><div class="grp-who"><div class="who-big">${esc(r.name || "bez nazwiska")}</div><p class="meta">${[r.unit, r.email, r.phone].filter(Boolean).map(esc).join(" · ")}</p></div><span class="chip ${cls}">${esc(stTxt)}</span></div>
     ${Array.isArray(r.items) && r.items.length ? `<ul class="req-items">${r.items.map(x => { const i = S.items.get(x.itemId), av = i ? avail(i) : 0, q = +x.qty || 1; return `<li><span>${esc((i && i.name) || x.itemName || "?")}${q > 1 ? ` <span class="qty">×${q}</span>` : ""}</span>${i ? `<span class="${av >= q ? "t-ok" : "t-late"}">${av >= q ? "dostępne teraz" : av > 0 ? `teraz wolne ${av}` : "teraz niedostępne"}</span>` : `<span class="t-late">nie ma w spisie</span>`}</li>`; }).join("")}</ul>` : `<div class="req-what">${esc(r.what || "—")}</div>`}
     <p class="meta">${[(r.from || r.to) ? `termin ${rangeTxt(r.from, r.to)}` : "", r.purpose ? `cel: ${r.purpose}` : "", r.at ? `wysłany ${fmtDate(r.at)}` : ""].filter(Boolean).map(esc).join(" · ")}</p>
     ${r.note ? `<p class="meta">Uwagi: ${esc(r.note)}</p>` : ""}${r.reason ? `<p class="meta">Powód odrzucenia: ${esc(r.reason)}</p>` : ""}
@@ -3091,6 +3092,6 @@ async function boot(){
 }
 boot();
 </script>
-<script src="./prod.js?v=20261123-kategorie"></script>
+<script src="./prod.js?v=20261123-statusy"></script>
 
 </body></html>
