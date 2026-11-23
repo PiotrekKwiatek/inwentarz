@@ -31,6 +31,92 @@
     return _subOne(name);
   };
 
+  /* ---------- oszczędne wczytywanie (23.11) ----------
+     Darmowy plan Firebase to 50 000 odczytów dziennie, a każde otwarcie aplikacji czyta wszystko od nowa.
+     Na start biuro i admin dostają więc tylko ostatnie 3 miesiące historii, oddanych wypożyczeń i załatwionych usterek.
+     Otwarte wypożyczenia i otwarte usterki są zawsze w całości. Starsze dane wczytują się na żądanie
+     („Wczytaj starsze”, okres „ostatni rok” / „całość” w Historii) i zawsze przed kopią zapasową. */
+  var RECENT_DAYS = 92, LAZY = ["active", "loans", "issues", "log"];
+  var subs = {}, part = {}, firstGot = {}, fullWait = null, fullRes = null, fullLeft = 0;
+  S.histFull = false;
+  function cutoffDate(){ var d = new Date(); d.setDate(d.getDate() - RECENT_DAYS); d.setHours(0, 0, 0, 0); return d; }
+  function stopSub(name){ (subs[name] || []).forEach(function(u){ try { u(); } catch (_){} }); subs[name] = []; }
+  function byDesc(f){ return function(a, b){ return String(b[f] || "").localeCompare(String(a[f] || "")); }; }
+  function mergeById(lists){ var m = new Map(); lists.forEach(function(l){ (l || []).forEach(function(x){ m.set(x.id, x); }); }); return Array.from(m.values()); }
+  function setLoans(){ S.loans = S.histFull && part.loansAll ? part.loansAll : mergeById([part.loansRecent, S.active]).sort(byDesc("out")); }
+  function setIssues(){ S.issues = S.histFull && part.issuesAll ? part.issuesAll : mergeById([part.issuesOpen, part.issuesRecent]).sort(byDesc("at")); }
+  function setLog(docs){
+    S.log = docs.flatMap(function(d){ var v = d.data() || {}; return Object.entries(v.ev && typeof v.ev === "object" ? v.ev : {}).map(function(p){ return Object.assign({}, p[1], {id:p[0]}); }); })
+      .filter(function(e){ return e && e.at; }).sort(function(a, b){ return String(b.at).localeCompare(String(a.at)); });
+  }
+  function fullArrived(key){
+    if (!fullRes || firstGot[key]) return; firstGot[key] = true;
+    if (--fullLeft <= 0){ var r = fullRes; fullRes = null; r(); }
+  }
+  var _subOne2 = subOne;
+  subOne = function(name){
+    if (!S.db || !isStaff() || LAZY.indexOf(name) < 0) return _subOne2(name);
+    stopSub(name);
+    var full = S.histFull, need = 0, got = {};
+    var err = function(e){ S.got[name] = true; scheduleRender(); if (full) fullArrived("full-" + name); onSubErr(name)(e); };
+    var on = function(key, q, fn){
+      need++;
+      subs[name].push(q.onSnapshot(function(s){
+        fn(s);
+        if (!got[key]){ got[key] = true; need--; }
+        if (need <= 0){ S.got[name] = true; if (full) fullArrived("full-" + name); }
+        scheduleRender();
+      }, err));
+    };
+    var rows = function(s){ return s.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); }); };
+    var c = cutoffDate(), cIso = c.toISOString(), cDay = ymdOf(c);
+    if (name === "active") on("a", S.db.collection("loans").where("open", "==", true), function(s){ S.active = rows(s); setLoans(); });
+    else if (name === "loans"){
+      if (full) on("all", S.db.collection("loans").orderBy("out", "desc"), function(s){ part.loansAll = rows(s); setLoans(); });
+      else on("recent", S.db.collection("loans").where("out", ">=", cIso).orderBy("out", "desc"), function(s){ part.loansRecent = rows(s); setLoans(); });
+    }
+    else if (name === "issues"){
+      if (full) on("all", S.db.collection("issues").orderBy("at", "desc"), function(s){ part.issuesAll = rows(s); setIssues(); });
+      else {
+        on("open", S.db.collection("issues").where("open", "==", true), function(s){ part.issuesOpen = rows(s); setIssues(); });
+        on("recent", S.db.collection("issues").where("at", ">=", cIso).orderBy("at", "desc"), function(s){ part.issuesRecent = rows(s); setIssues(); });
+      }
+    }
+    else if (name === "log"){
+      if (full) on("all", S.db.collection("log").orderBy("day", "desc"), function(s){ setLog(s.docs); });
+      else on("recent", S.db.collection("log").where("day", ">=", cDay).orderBy("day", "desc"), function(s){ setLog(s.docs); });
+    }
+  };
+  // Wczytuje całość historii (raz na sesję). Zwraca obietnicę, która kończy się, gdy dane są na miejscu.
+  window.INW_FULL = function(){
+    if (!S.db || !isStaff()) return Promise.resolve();
+    if (S.histFull) return fullWait || Promise.resolve();
+    S.histFull = true; firstGot = {}; fullLeft = 3;
+    fullWait = new Promise(function(res){ fullRes = res; });
+    ["loans", "issues", "log"].forEach(function(n){ subOne(n); });
+    scheduleRender();
+    return fullWait.then(function(){ scheduleRender(); });
+  };
+  var _histList = histListHTML;
+  histListHTML = function(){
+    var h = _histList();
+    if (!ACC() || !isStaff() || S.histFull && !fullRes) return h;
+    if (S.histFull || S.hist.period === "365" || S.hist.period === "all"){ window.INW_FULL(); return h + '<p class="meta inw-older">Wczytuję starszą historię…</p>'; }
+    return h + '<div class="actions inw-older"><span class="meta">Wczytane są ruchy z ostatnich 3 miesięcy.</span><button type="button" class="btn btn-sm btn-ghost" data-act="inw-full">Wczytaj starsze</button></div>';
+  };
+  var _itemLog = itemLogHTML;
+  itemLogHTML = function(id){
+    var h = _itemLog(id);
+    if (!h || !ACC() || !isStaff() || S.histFull) return h;
+    return h + '<div class="actions inw-older"><span class="meta">Zmiany z ostatnich 3 miesięcy.</span><button type="button" class="btn btn-sm btn-ghost" data-act="inw-full">Wczytaj starsze</button></div>';
+  };
+  // Kopia zapasowa ma zawsze zawierać całą historię, nie tylko ostatnie 3 miesiące.
+  var _backup = backupXlsx;
+  backupXlsx = async function(){
+    if (ACC() && isStaff() && !(S.histFull && !fullRes)){ toast("Wczytuję całą historię do kopii…"); await window.INW_FULL(); }
+    return _backup();
+  };
+
   /* ---------- katalog dla drużynowych (prowadzi go biuro/admin automatycznie) ---------- */
   function stable(v){ if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]"; if (v && typeof v === "object") return "{" + Object.keys(v).sort().map(function(k){ return JSON.stringify(k) + ":" + stable(v[k]); }).join(",") + "}"; return JSON.stringify(v); }
   function catalogNow(){
@@ -281,6 +367,7 @@
     var act = b.dataset.act, id = b.dataset.id;
     switch (act){
       case "inw-pass": closeSheet(); if (window.INW_PASS) window.INW_PASS(); break;
+      case "inw-full": b.disabled = true; b.textContent = "Wczytuję…"; window.INW_FULL(); break;
       case "inw-reqs": S.lentFilter = "requests"; go("wypozyczone"); break;
       case "d-only": S.dOnlyAvail = b.dataset.f === "1"; render(); break;
       case "d-item": dItem(id); break;
