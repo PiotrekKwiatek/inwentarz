@@ -24,6 +24,15 @@ window.claude = {use: function(n){ return window.__inwReady.then(function(a){ re
 window.INW_BLOB = window.INW_BLOB || function(){ return ""; };
 </script>
 <script src="./local.js"></script>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" href="./icons/favicon.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Inwentarz">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#FFFFFF">
+<style>.inw-install{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}.inw-install b{font-size:15px}</style>
 </head><body>
 
 <title>Inwentarz hufca (wersja testowa)</title>
@@ -512,13 +521,13 @@ button.row{width:100%;text-align:left;font:inherit;color:inherit;background:var(
 <input type="file" id="scan-cam" class="vh" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
 <input type="file" id="scan-gal" class="vh" accept="image/*" tabindex="-1" aria-hidden="true">
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="./vendor/qrcode.js"></script>
 <script>
 "use strict";
 /* Adres tej strony: trafia do kodów QR, żeby zwykły aparat telefonu otwierał od razu właściwą rzecz. */
 const APP_URL = location.origin + location.pathname.replace(/index\.html$/, "");
-const JSQR_URL = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
-const JSPDF_URL = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+const JSQR_URL = "./vendor/jsQR.js";
+const JSPDF_URL = "./vendor/jspdf.umd.min.js";
 const ALPH = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const COL = {room:"rooms", box:"boxes", item:"items"};
 const KIND = {room:"Pomieszczenie", box:"Pudło", item:"Przedmiot"};
@@ -604,7 +613,7 @@ const FEAT_REQ = false; // wnioski z MS Forms: wyłączone do czasu przenosin (2
 /* ---------- meeting 16.11: helpers ---------- */
 const PERSONAL = "Wypożyczenie osobiste";
 const DEFAULT_UNITS = ["Komenda Hufca", "1 LSH Topazowy Kamień", "4 JSH Enigma", "4 ŚDW Sokolik", "5 SH Na Wskroś", "6 ŚWDH Kora Brzozowa", "7 SH Ruczaj", "8 PGZ Odważne Nietoperki", "11 GZ Dzielne Wilczki", "14 DH Ventus", "24 GZ Kubusiowa Brygada", "25 DH Przygoda", "39 DHS Barykada", "44 DH Zorza", "45 DH Watra", "55 DHS Exigo", "77 GZ Złote Rybki", "93 DH Płomień", "99 DHS Iskra", "100 DHSiW Watra", "104 WDH Strumień", "Krąg Seniorów i Starszyzny"];
-const XLSX_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+const XLSX_URL = "./vendor/xlsx.full.min.js";
 const store = {get(k){ try { return localStorage.getItem(k); } catch (_){ return null; } }, set(k, v){ try { localStorage.setItem(k, v); } catch (_){} }};
 const rid = () => { const a = new Uint32Array(4); crypto.getRandomValues(a); return [...a].map(x => x.toString(36).padStart(7, "0")).join("").slice(0, 20); };
 const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;

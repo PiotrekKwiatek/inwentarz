@@ -8,3 +8,5 @@ Zmiany jednej osoby nie są widoczne dla innych. „Zacznij od nowa” (przycisk
 - `index.html` – aplikacja, budowana automatycznie z prototypu w Claude, więc nie warto jej poprawiać ręcznie.
 - `local.js` – zapis danych w przeglądarce (IndexedDB) zamiast wspólnej bazy.
 - `demo.json` – przykładowe dane, daty liczone od dnia otwarcia.
+- `manifest.webmanifest`, `icons/`, `sw.js` – instalacja na telefonie (ikona na ekranie początkowym) i praca bez internetu.
+- `vendor/` – biblioteki do kodów QR, PDF i Excela, trzymane tutaj, żeby działały bez internetu.

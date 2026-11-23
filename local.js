@@ -82,9 +82,15 @@
     .observe(document.documentElement, {childList:true, subtree:true});
 
   /* ---------- pobieranie plików ---------- */
+  const standalone = () => window.navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
   const downloads = {
     save:async ({filename, data, type}) => {
       const b = data instanceof Blob ? data : new Blob([data], {type:type || "text/plain;charset=utf-8"});
+      // w aplikacji z ekranu początkowego iPhone'a pobieranie bywa kłopotliwe, więc używamy „Udostępnij” (Zachowaj w Plikach, Drukuj, AirDrop)
+      if (standalone() && navigator.canShare){
+        try { const f = new File([b], filename || "plik", {type:b.type || "application/octet-stream"}); if (navigator.canShare({files:[f]})){ await navigator.share({files:[f], title:filename}); return; } }
+        catch (e){ if (e && e.name === "AbortError") return; }
+      }
       const u = URL.createObjectURL(b), a = document.createElement("a");
       a.href = u; a.download = filename || "plik"; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(u), 10000);
@@ -130,6 +136,7 @@
     openSheet("Wersja testowa", `<div class="f">
       <p class="lead">Dane są przykładowe. Twoje zmiany zapisują się tylko w tej przeglądarce: inni testujący ich nie widzą, a Ty nie widzisz ich zmian.</p>
       <p class="hint">„Zacznij od nowa” usuwa Twoje zmiany i przywraca dane przykładowe.</p>
+      ${standalone() ? `<p class="hint">Działa jako aplikacja z ekranu początkowego, także bez internetu.</p>` : `<div class="inw-install"><b>Ikona na telefonie</b><p class="hint">iPhone: w Safari stuknij Udostępnij <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="vertical-align:-3px"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12M8 7l4-4 4 4M7 11H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg> i wybierz „Do ekranu początkowego”. Android: w Chrome menu ⋮ → „Zainstaluj aplikację”. Aplikacja z ikony ma osobne dane niż przeglądarka.</p></div>`}
       <div class="form-actions"><button type="button" class="btn btn-ghost btn-danger" data-act="inw-reset">Zacznij od nowa</button><span class="spacer"></span><button type="button" class="btn btn-primary" data-act="close-sheet">Zamknij</button></div>
     </div>`, null, {noFocus:true});
   };
@@ -139,6 +146,19 @@
     await seed(); await idbPut(KEY, store); try { localStorage.removeItem("inw-test-db"); localStorage.removeItem("inw-cart"); localStorage.removeItem("inw-cart-draft"); } catch (_){}
     location.reload();
   };
+
+  /* ---------- aplikacja na ekranie telefonu ---------- */
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")){
+    window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js").catch(e => console.warn("sw", e)); });
+  }
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_){}
+  const syncThemeColor = () => {
+    const m = document.querySelector('meta[name="theme-color"]'); if (!m) return;
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim(); if (v) m.setAttribute("content", v);
+  };
+  new MutationObserver(syncThemeColor).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+  window.addEventListener("load", syncThemeColor);
+  window.INW_STANDALONE = standalone;
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
