@@ -492,6 +492,11 @@ button.row{width:100%;text-align:left;font:inherit;color:inherit;background:var(
 .bag-it{font-size:13px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
 .scan-aim{justify-content:center}
 .sheet-lead.lnk{display:inline-block;text-decoration:none;border-bottom:1px solid var(--line)}
+
+.req-items{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:4px}
+.req-items li{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:15px}
+.req-items li > span:last-child{font-size:13px;white-space:nowrap}
+.t-ok{color:var(--ok)}
 .ev-chg{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
 .ev-gone{background:var(--surface-2);color:var(--ink-3);border:1px dashed var(--line)}
 .row-sub.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
@@ -1655,7 +1660,7 @@ function openLend(list, opt = {}){
   const title = opt.plan ? "Wydaj zaplanowane" : opt.editPlan ? "Zmień zaplanowane" : R ? "Wniosek: zaplanuj wydanie" : "Wypożycz";
   const today = todayYMD(), canAdd = !!(R || opt.editPlan || opt.fromCart);
   openSheet(title, `<form class="f" novalidate>
-    ${R ? `<div class="ref-box"><b>Prośba z wniosku:</b>\n${esc(R.what || "—")}</div>` : ""}
+    ${R ? `<div class="ref-box"><b>Prośba z wniosku${R.name ? ` (${esc(R.name)})` : ""}:</b>\n${esc(R.what || "—")}${R.from ? `\nTermin: ${esc(rangeTxt(R.from, R.to))}` : ""}${R.note ? `\nUwagi: ${esc(R.note)}` : ""}</div>` : ""}
     <section class="ldsec"><span class="flabel">Co wydajesz</span><div class="lrows" id="ld-rows"></div>
       ${canAdd ? `<input id="ld-q" class="inp" placeholder="Dodaj rzecz: szukaj w spisie albo wpisz kod" autocomplete="off" aria-label="Dodaj rzecz"><div id="ld-res" class="list ld-res" hidden></div>` : ""}</section>
     <div class="grid2 stack">
@@ -1744,7 +1749,7 @@ function openLend(list, opt = {}){
         } else {
           const pid = rid();
           await retry(() => S.db.doc("plans/" + pid).set({...doc, createdAt:t, createdBy:S.me.id, requestId:R ? R.id : null}));
-          if (R) await retry(() => S.db.doc("requests/" + R.id).update({status:"zaplanowany", planId:pid, updatedAt:t}));
+          if (R) await retry(() => S.db.doc("requests/" + R.id).update({status:"zaplanowany", planId:pid, plannedPickup:pickup, plannedDue:due || null, plannedItems:itTxt(items), updatedAt:t}));
           logEv("plan", `Zaplanowano wydanie na ${fmtYMD(pickup)}: ${whoU}`, {plan:pid, req:R ? R.id : "", unit:uTxt, d:[itTxt(items), purpose ? `cel: ${purpose}` : "", datesTxt({useTo, due}), R ? "z wniosku" : ""].filter(Boolean).join(" · ")});
         }
         if (opt.fromCart){ S.cart = []; saveCart(); cartDraftClear(); }
@@ -1769,8 +1774,9 @@ function openLend(list, opt = {}){
       }
       if (opt.plan){
         await retry(() => S.db.doc("plans/" + opt.plan.id).delete());
-        if (opt.plan.requestId && S.requests.some(x => x.id === opt.plan.requestId)) await retry(() => S.db.doc("requests/" + opt.plan.requestId).update({status:"wydany", updatedAt:t}));
+        if (opt.plan.requestId && S.requests.some(x => x.id === opt.plan.requestId)) await retry(() => S.db.doc("requests/" + opt.plan.requestId).update({status:"wydany", issuedAt:t, updatedAt:t}));
       }
+      if (R) await retry(() => S.db.doc("requests/" + R.id).update({status:"wydany", issuedAt:t, updatedAt:t}));
       if (opt.fromCart){ S.cart = []; saveCart(); cartDraftClear(); }
       else if (st.rows.some(r => inCart(r.itemId))){ S.cart = S.cart.filter(c => !st.rows.some(r => r.itemId === c.itemId)); saveCart(); }
       toast(`Wydano ${st.rows.length} ${pl(st.rows.length, "pozycję", "pozycje", "pozycji")}: ${to}`);
@@ -1983,10 +1989,10 @@ function reqCard(r){
   const st = r.status || "nowy", cls = {nowy:"warn", zaplanowany:"lent", wydany:"ok", odrzucony:"mute"}[st] || "mute";
   return `<section class="grp">
     <div class="grp-head"><div class="grp-who"><div class="who-big">${esc(r.name || "bez nazwiska")}</div><p class="meta">${[r.unit, r.email, r.phone].filter(Boolean).map(esc).join(" · ")}</p></div><span class="chip ${cls}">${st}</span></div>
-    <div class="req-what">${esc(r.what || "—")}</div>
+    ${Array.isArray(r.items) && r.items.length ? `<ul class="req-items">${r.items.map(x => { const i = S.items.get(x.itemId), av = i ? avail(i) : 0, q = +x.qty || 1; return `<li><span>${esc((i && i.name) || x.itemName || "?")}${q > 1 ? ` <span class="qty">×${q}</span>` : ""}</span>${i ? `<span class="${av >= q ? "t-ok" : "t-late"}">${av >= q ? "dostępne teraz" : av > 0 ? `teraz wolne ${av}` : "teraz niedostępne"}</span>` : `<span class="t-late">nie ma w spisie</span>`}</li>`; }).join("")}</ul>` : `<div class="req-what">${esc(r.what || "—")}</div>`}
     <p class="meta">${[(r.from || r.to) ? `termin ${rangeTxt(r.from, r.to)}` : "", r.purpose ? `cel: ${r.purpose}` : "", r.at ? `wysłany ${fmtDate(r.at)}` : ""].filter(Boolean).map(esc).join(" · ")}</p>
     ${r.note ? `<p class="meta">Uwagi: ${esc(r.note)}</p>` : ""}${r.reason ? `<p class="meta">Powód odrzucenia: ${esc(r.reason)}</p>` : ""}
-    ${S.canWrite ? `<div class="actions">${st === "nowy" ? `<button type="button" class="btn btn-sm btn-primary" data-act="req-plan" data-id="${r.id}">${IC.cal}<span>Zaplanuj wydanie</span></button>` : ""}${st === "zaplanowany" ? `<button type="button" class="btn btn-sm" data-act="lent-filter" data-f="plans">Zobacz zaplanowane</button>` : ""}<button type="button" class="btn btn-sm" data-act="req-reply" data-id="${r.id}">${IC.mail}<span>Odpowiedz</span></button>${st === "nowy" ? `<button type="button" class="btn btn-sm btn-ghost" data-act="req-reject" data-id="${r.id}">Odrzuć</button>` : ""}${canFull() ? `<button type="button" class="btn btn-sm btn-ghost btn-danger" data-act="req-del" data-id="${r.id}">Usuń</button>` : ""}</div>` : ""}
+    ${S.canWrite ? `<div class="actions">${st === "nowy" ? `<button type="button" class="btn btn-sm btn-primary" data-act="req-plan" data-id="${r.id}">${IC.cal}<span>${Array.isArray(r.items) ? "Zaplanuj albo wydaj" : "Zaplanuj wydanie"}</span></button>` : ""}${st === "zaplanowany" ? `<button type="button" class="btn btn-sm" data-act="lent-filter" data-f="plans">Zobacz zaplanowane</button>` : ""}<button type="button" class="btn btn-sm" data-act="req-reply" data-id="${r.id}">${IC.mail}<span>Odpowiedz</span></button>${st === "nowy" ? `<button type="button" class="btn btn-sm btn-ghost" data-act="req-reject" data-id="${r.id}">Odrzuć</button>` : ""}${canFull() ? `<button type="button" class="btn btn-sm btn-ghost btn-danger" data-act="req-del" data-id="${r.id}">Usuń</button>` : ""}</div>` : ""}
   </section>`;
 }
 function reqReply(id, extra){
@@ -2800,7 +2806,7 @@ document.addEventListener("click", e => {
     case "plan-del": planDel(id); break;
     case "plan-del-do": planDelDo(id, b); break;
     case "plan-mail": planMail(id); break;
-    case "req-plan": { const r = S.requests.find(x => x.id === id); if (r) openLend([], {request:r, mode:"plan"}); break; }
+    case "req-plan": { const r = S.requests.find(x => x.id === id); if (r) openLend(Array.isArray(r.items) ? r.items.filter(x => S.items.has(x.itemId)).map(x => ({itemId:x.itemId, qty:Math.max(1, +x.qty || 1)})) : [], {request:r, mode:"plan"}); break; }
     case "req-reply": reqReply(id); break;
     case "req-reject": reqReject(id); break;
     case "req-del": reqDel(id); break;

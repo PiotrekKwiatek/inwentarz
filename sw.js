@@ -1,5 +1,5 @@
-// Inwentarz hufca: praca bez internetu. Wersja: 20261123-085706
-const CACHE = "inwentarz-20261123-085706";
+// Inwentarz hufca: praca bez internetu. Wersja: 20261123-131446
+const CACHE = "inwentarz-20261123-131446";
 const CORE = ["./", "./index.html", "./local.js", "./demo.json", "./manifest.webmanifest",
   "./icons/apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/favicon.png",
   "./vendor/qrcode.js", "./vendor/jsQR.js", "./vendor/jspdf.umd.min.js", "./vendor/xlsx.full.min.js"];
@@ -17,6 +17,8 @@ self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  // wersja z kontami (/hufiec/) ma własne zasady: nie ruszamy jej
+  if (url.pathname.includes("/hufiec/")) return;
   // strona: najpierw sieć (żeby szybko dostać poprawki), bez sieci z pamięci
   if (req.mode === "navigate"){
     e.respondWith(timed(req, 5000).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put("./index.html", c)); return r; })
