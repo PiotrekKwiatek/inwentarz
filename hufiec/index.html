@@ -48,6 +48,17 @@ img.no-blob{visibility:hidden}
 .u-add textarea{width:100%;font:15px var(--f-body);padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
 .u-list{margin-top:10px}
 .chk{display:flex;gap:10px;align-items:center;font-size:15px}.chk input{width:22px;height:22px}
+/* kategorie */
+.cat-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+a.chip-btn{display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+.chip-btn .n{font-weight:500;opacity:.65;margin-left:0}
+.chip-btn[aria-current="page"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.ca-list{display:grid;border-top:1px solid var(--line)}
+.ca-row{display:grid;grid-template-columns:1fr minmax(150px,210px);gap:6px 10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.ca-name{min-width:0;display:grid}.ca-name .hint{margin:0}
+.ca-row select{font:15px var(--f-body);padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);width:100%}
+@media (max-width:480px){.ca-row{grid-template-columns:1fr}}
+.d-ctl{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
 /* widok drużynowego: pomieszczenia jako zwijane sekcje */
 .d-rooms{flex-wrap:nowrap;overflow-x:auto;margin:10px -4px 0;padding:2px 4px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
 .d-rooms::-webkit-scrollbar{display:none}
@@ -62,13 +73,13 @@ img.no-blob{visibility:hidden}
 @media (hover:hover){.d-grp>summary:hover{background:var(--surface-2)}}
 .d-grp[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0;background:var(--surface-2)}
 .d-grp[open]>.list{border-top:0;border-top-left-radius:0;border-top-right-radius:0}
-.d-grp-name{flex:1;min-width:0;font:700 16px/1.2 var(--f-display);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.d-grp-n{flex:none;font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.d-grp-t{flex:1;min-width:0;display:grid;gap:2px}
+.d-grp-name{min-width:0;font:700 16px/1.2 var(--f-display);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d-grp-n{font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .d-grp-ic{flex:none;width:9px;height:9px;margin:0 4px 3px 2px;border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(45deg);transition:transform .15s}
 .d-grp[open] .d-grp-ic{transform:rotate(-135deg);margin-bottom:-3px}
 .d-loc{font-size:13px;color:var(--ink-3);margin-left:4px}
 .d-where{margin:0;font-size:15px;color:var(--ink-2)}
-@media (max-width:420px){.d-grp-n{max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 </style>
 <script>
 window.__inwReady = new Promise(function(r){ window.__inwResolve = r; });
@@ -669,6 +680,66 @@ const FEAT_REQ = true; // wnioski z MS Forms: wyłączone do czasu przenosin (21
 
 /* ---------- meeting 16.11: helpers ---------- */
 const PERSONAL = "Wypożyczenie osobiste";
+const DEFAULT_CATS = ["Sprzęt biwakowy", "Kuchnia obozowa", "Sprzęt pionierski", "Sprzęt elektroniczny", "Materiały programowe", "Meble i wyposażenie", "Inne"];
+const NOCAT = "~bez";
+function catsList(){ const d = S.config.get("categories"); const l = d && Array.isArray(d.list) ? d.list.filter(x => typeof x === "string" && x.trim()) : null; return l && l.length ? l : DEFAULT_CATS; }
+function catOpts(cur){ const l = catsList(), all = cur && !l.includes(cur) ? [...l, cur] : l; return `<option value="">— bez kategorii —</option>` + all.map(c => `<option${c === cur ? " selected" : ""}>${esc(c)}</option>`).join(""); }
+function catHref(c){ return "#kategoria/" + encodeURIComponent(c || NOCAT); }
+function catCounts(){ const m = new Map(); for (const i of S.items.values()){ const k = i.cat || ""; m.set(k, (m.get(k) || 0) + 1); } return m; }
+function catChipsHTML(cur){
+  const cnt = catCounts(), l = catsList(), extra = [...cnt.keys()].filter(c => c && !l.includes(c)).sort((a, b) => a.localeCompare(b, "pl"));
+  const chip = (key, label, n) => `<a class="chip-btn" href="${catHref(key)}"${cur === (key || NOCAT) ? ' aria-current="page"' : ""}>${esc(label)} <span class="n">${n}</span></a>`;
+  return `<div class="cat-chips">${[...l.filter(c => cnt.get(c)), ...extra].map(c => chip(c, c, cnt.get(c))).join("")}${cnt.get("") ? chip("", "Bez kategorii", cnt.get("")) : ""}</div>`;
+}
+function catsHomeHTML(){
+  if (!S.items.size) return "";
+  const none = (catCounts().get("") || 0) === S.items.size;
+  return `<section class="sec"><div class="sec-head"><h2 class="sec-title">Kategorie</h2>${canFull() ? `<button type="button" class="btn btn-sm btn-ghost" data-act="cats-edit">${IC.list}<span>Edytuj listę</span></button>` : ""}</div>${catChipsHTML("")}${none ? `<p class="hint">Żadna rzecz nie ma jeszcze kategorii. Otwórz „Bez kategorii” i przypisz je hurtem.</p>` : ""}</section>`;
+}
+function viewCategory(cat){
+  if (!ready()) return loadingView();
+  const none = !cat || cat === NOCAT, name = none ? "Bez kategorii" : cat;
+  const items = [...S.items.values()].filter(i => none ? !i.cat : i.cat === cat).sort(byName);
+  const groups = roomsArr().map(r => [r.name, items.filter(i => i.roomId === r.id)]).filter(([, l]) => l.length);
+  const orphan = items.filter(i => !S.rooms.has(i.roomId)); if (orphan.length) groups.push(["Bez pomieszczenia", orphan]);
+  const av = items.filter(i => avail(i) > 0).length;
+  return `${crumbs([])}<div class="head"><div class="head-text"><div class="eyebrow">Kategoria</div><h1>${esc(name)}</h1><p class="lead">${items.length} ${pl(items.length, "przedmiot", "przedmioty", "przedmiotów")}${items.length ? ` · dostępne teraz: ${av}` : ""}</p></div>${S.canWrite && items.length ? `<button type="button" class="btn" data-act="cat-assign" data-f="${esc(none ? NOCAT : cat)}">${IC.list}<span>${none ? "Przypisz kategorie" : "Zmień kategorie"}</span></button>` : ""}</div>
+  ${catChipsHTML(none ? NOCAT : cat)}
+  ${items.length ? groups.map(([t, l]) => sec(esc(t), l.map(i => itemRow(i, false)))).join("") : `<div class="empty"><h2>Pusto</h2><p>W tej kategorii nie ma jeszcze żadnej rzeczy.</p></div>`}`;
+}
+function catAssignSheet(cat){
+  const none = !cat || cat === NOCAT;
+  const items = [...S.items.values()].filter(i => none ? !i.cat : i.cat === cat).sort((a, b) => locText(a).localeCompare(locText(b), "pl", {numeric:true}) || byName(a, b));
+  if (!items.length) return;
+  openSheet(none ? "Przypisz kategorie" : `Zmień kategorie: ${cat}`, `<form class="f" novalidate>
+    <p class="hint">Wybierz kategorię przy każdej rzeczy. Zapiszą się tylko zmienione.</p>
+    <div class="field"><label for="ca-all">Ustaw wszystkim na liście</label><select id="ca-all"><option value="~">— nie zmieniaj —</option>${catOpts("").replace('<option value="">— bez kategorii —</option>', "")}</select></div>
+    <div class="ca-list">${items.map(i => `<div class="ca-row"><div class="ca-name"><span><b>${esc(i.name)}</b>${qtyOf(i) !== 1 ? ` <span class="qty">×${qtyOf(i)}</span>` : ""}</span><span class="hint">${esc(locText(i) || "bez pomieszczenia")}</span></div><select data-ca="${i.id}" aria-label="Kategoria: ${esc(i.name)}">${catOpts(i.cat || "")}</select></div>`).join("")}</div>
+    <div class="form-actions"><button type="button" class="btn" data-act="close-sheet">Anuluj</button><button type="submit" class="btn btn-primary">Zapisz</button></div></form>`, w => {
+    $("#ca-all", w).addEventListener("change", e => { const v = e.target.value; if (v === "~") return; $$("[data-ca]", w).forEach(s => { s.value = v; }); });
+    onSubmit(w, async () => {
+      const ch = $$("[data-ca]", w).map(s => [s.dataset.ca, s.value]).filter(([id, v]) => { const i = S.items.get(id); return i && (i.cat || "") !== v; });
+      if (!ch.length){ toast("Nic się nie zmieniło."); return true; }
+      const t = now();
+      for (const [id, v] of ch) await retry(() => S.db.doc("items/" + id).update({cat:v, updatedAt:t, updatedBy:S.me.id}));
+      logEv("item", `Przypisano kategorie: ${ch.length} ${pl(ch.length, "przedmiot", "przedmioty", "przedmiotów")}`, {d:ch.slice(0, 40).map(([id, v]) => `${(S.items.get(id) || {}).name || id} → ${v || "bez kategorii"}`).join("; ")});
+      toast(`Zapisano kategorie: ${ch.length}.`); return true;
+    });
+  }, {noFocus:true});
+}
+function catsForm(){
+  openSheet("Lista kategorii", `<form class="f" novalidate><div class="field"><label for="f-cats">Jedna kategoria w linii</label><textarea id="f-cats" style="min-height:260px">${esc(catsList().join("\n"))}</textarea><p class="hint">Kolejność z tej listy jest kolejnością w aplikacji, także u drużynowych. Zmiana nazwy tutaj nie zmienia jej w rzeczach, które już ją mają: popraw je przyciskiem „Zmień kategorie” w widoku kategorii.</p></div><div class="form-actions"><button type="button" class="btn" data-act="close-sheet">Anuluj</button><button type="submit" class="btn btn-primary">Zapisz</button></div></form>`, w => {
+    onSubmit(w, async () => {
+      const list = [...new Set($("#f-cats", w).value.split("\n").map(x => x.trim().slice(0, 60)).filter(x => x && x !== NOCAT))].slice(0, 60);
+      if (!list.length){ fieldErr(w, "#f-cats", "Wpisz co najmniej jedną kategorię."); return false; }
+      const old = catsList();
+      await retry(() => S.db.doc("config/categories").set({list, updatedAt:now(), updatedBy:S.me.id}));
+      const add = list.filter(u => !old.includes(u)), rem = old.filter(u => !list.includes(u));
+      logEv("units", "Zmieniono listę kategorii", {d:[add.length ? `dodano: ${add.join(", ")}` : "", rem.length ? `usunięto: ${rem.join(", ")}` : ""].filter(Boolean).join(" · ") || "zmieniona kolejność"});
+      toast("Zapisano listę kategorii."); return true;
+    });
+  }, {noFocus:true});
+}
 const DEFAULT_UNITS = ["Komenda Hufca", "1 LSH Topazowy Kamień", "4 JSH Enigma", "4 ŚDW Sokolik", "5 SH Na Wskroś", "6 ŚWDH Kora Brzozowa", "7 SH Ruczaj", "8 PGZ Odważne Nietoperki", "11 GZ Dzielne Wilczki", "14 DH Ventus", "24 GZ Kubusiowa Brygada", "25 DH Przygoda", "39 DHS Barykada", "44 DH Zorza", "45 DH Watra", "55 DHS Exigo", "77 GZ Złote Rybki", "93 DH Płomień", "99 DHS Iskra", "100 DHSiW Watra", "104 WDH Strumień", "Krąg Seniorów i Starszyzny"];
 const XLSX_URL = "./vendor/xlsx.full.min.js";
 const store = {get(k){ try { return localStorage.getItem(k); } catch (_){ return null; } }, set(k, v){ try { localStorage.setItem(k, v); } catch (_){} }};
@@ -775,6 +846,7 @@ function route(){
   const h = decodeURIComponent(location.hash.replace(/^#/, ""));
   if (!h) return {v:"home"};
   if (["wypozyczone", "historia", "etykiety", "archiwum"].includes(h)) return {v:h};
+  if (h.startsWith("kategoria/")) return {v:"kat", cat:h.slice(10)};
   const c = h.toUpperCase();
   if (/^[A-Z0-9]{6}$/.test(c)) return {v:"code", code:c};
   return {v:"home"};
@@ -803,6 +875,7 @@ function render(){
   else if (r.v === "wypozyczone") html = viewLent();
   else if (r.v === "historia") html = viewHistory();
   else if (r.v === "archiwum") html = viewArchive();
+  else if (r.v === "kat") html = viewCategory(r.cat);
   else if (r.v === "etykiety") html = canFull() ? viewLabels() : viewHome();
   else if (r.v === "code") html = viewCode(r.code);
   else html = viewHome();
@@ -811,7 +884,7 @@ function render(){
   if (r.v === "etykiety" && !S.q.trim()) schedulePreview();
 }
 function updateTabs(){
-  const r = route(), cur = S.q.trim() ? "home" : (r.v === "code" ? "home" : r.v);
+  const r = route(), cur = S.q.trim() ? "home" : (r.v === "code" || r.v === "kat" ? "home" : r.v);
   $$("#tabs [data-tab]").forEach(t => t.dataset.tab === cur ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current"));
   const b = $("#tab-badge"); if (b){ const n = S.active.length, late = S.active.some(isLate); b.hidden = !n; b.textContent = n; b.classList.toggle("late", late); }
   updateCartBar();
@@ -898,6 +971,7 @@ function viewHome(){
     <a class="stat${issueN ? " warn" : ""}" href="#wypozyczone" data-act="lent-filter" data-f="issues"><b>${issueN}</b><span>braki i usterki</span></a>
   </div>`}
   ${rooms.length ? `<section class="sec">${roomList}</section>` : ""}
+  ${S.arrange ? "" : catsHomeHTML()}
   ${(!S.arrange && (orphanItems.length || orphanBoxes.length)) ? `<section class="sec"><div class="sec-head"><h2 class="sec-title">Bez pomieszczenia</h2></div><div class="list">${orphanBoxes.map(b => boxRow(b)).join("")}${orphanItems.map(i => itemRow(i, false)).join("")}</div></section>` : ""}
   ${tools && !S.arrange ? `<div class="actions">${tools}</div>${canFull() && S.downloads ? `<p class="hint${bi.old ? " t-warn" : ""}">${esc(bi.txt)}.${bi.old ? " Zrób kopię zapasową, żeby dane były też poza aplikacją." : ""}</p>` : ""}` : ""}`;
 }
@@ -986,6 +1060,7 @@ function viewItem(i){
   ${plans.length ? `<section class="sec"><div class="sec-head"><h2 class="sec-title">Zaplanowane wydania<span class="n">${plans.length}</span></h2></div><div class="list">${plans.map(p => { const x = p.items.find(y => y.itemId === i.id); return `<a class="row" href="#wypozyczone" data-act="lent-filter" data-f="plans"><div class="row-main"><div class="row-title">${esc(p.to || "")}${(+x.qty || 1) > 1 ? ` <span class="qty">×${+x.qty}</span>` : ""}</div><div class="row-sub">${esc([unitTxt(p), `odbiór ${fmtYMD(p.pickup)}`, p.purpose].filter(Boolean).join(" · "))}</div></div><span class="chip lent">zaplanowane</span></a>`; }).join("")}</div></section>` : ""}
   <dl class="facts">
     <div><dt>Gdzie</dt><dd>${where}</dd></div>
+    <div><dt>Kategoria</dt><dd>${i.cat ? `<a href="${catHref(i.cat)}">${esc(i.cat)}</a>` : `<a class="opt" href="${catHref("")}">bez kategorii</a>`}</dd></div>
     ${parts.length ? `<div><dt>W zestawie</dt><dd>${esc(parts.map(partTxt).join(", "))}</dd></div>` : ""}
     ${i.note ? `<div><dt>Uwagi</dt><dd>${esc(i.note)}</dd></div>` : ""}
     ${codesRow(i)}
@@ -1050,7 +1125,7 @@ function viewSearch(q){
   const n = norm(q), cq = q.toUpperCase().replace(/[\s\-]/g, "");
   const codeHit = e => cq.length >= 3 && /^[A-Z0-9]+$/.test(cq) && [e.id, ...arr(e.codes)].some(c => c.includes(cq));
   const hit = (...f) => f.some(x => norm(x).includes(n));
-  const items = [...S.items.values()].filter(i => codeHit(i) || hit(i.name, i.note, partsTxt(i.parts), loansOf(i.id).map(l => `${l.to} ${l.unit || ""}`).join(" "))).sort(byName);
+  const items = [...S.items.values()].filter(i => codeHit(i) || hit(i.name, i.note, i.cat, partsTxt(i.parts), loansOf(i.id).map(l => `${l.to} ${l.unit || ""}`).join(" "))).sort(byName);
   const boxes = [...S.boxes.values()].filter(b => codeHit(b) || hit(b.name, b.note, b.place)).sort(byName);
   const rooms = [...S.rooms.values()].filter(r => codeHit(r) || hit(r.name, r.note)).sort(byName);
   const total = items.length + boxes.length + rooms.length;
@@ -1437,6 +1512,7 @@ function itemForm(item, preset = {}){
   const parts = normParts(item && item.parts), lab = item ? item.label === true : !!code;
   openSheet(item ? "Edytuj przedmiot" : "Nowy przedmiot", `<form class="f" novalidate>${code ? codeHint(code) : ""}
     <div class="field"><label for="f-name">Nazwa</label><input id="f-name" maxlength="100" value="${esc(item && item.name)}" placeholder="np. Projektor Epson, Namiot 4-osobowy"></div>
+    <div class="field"><label for="f-cat">Kategoria</label><select id="f-cat">${catOpts(item ? (item.cat || "") : (preset.cat != null ? preset.cat : (S.last.cat || "")))}</select></div>
     <div class="grid2 stack">
       <div class="field"><label for="f-room">Pomieszczenie</label><select id="f-room">${roomOpts(rid0)}</select></div>
       <div class="field"><label for="f-box">Pudło</label><select id="f-box">${boxOpts(rid0, bid)}</select></div>
@@ -1454,24 +1530,24 @@ function itemForm(item, preset = {}){
     pr.addEventListener("click", e => { const b = e.target.closest('[data-p="rm"]'); if (!b) return; const row = b.closest(".prow"); if (pr.children.length > 1) row.remove(); else { row.querySelector('[data-p="name"]').value = ""; row.querySelector('[data-p="qty"]').value = 1; } });
     onSubmit(w, async sub => {
       const name = $("#f-name", w).value.trim(); if (!name){ fieldErr(w, "#f-name", "Podaj nazwę przedmiotu."); return false; }
-      const roomId = $("#f-room", w).value, boxId = $("#f-box", w).value || null;
+      const roomId = $("#f-room", w).value, boxId = $("#f-box", w).value || null, cat = $("#f-cat", w).value || "";
       const qty = clampInt($("#f-qty", w).value, 0, 99999);
       const partsNew = $$(".prow", w).map(r => ({name:$('[data-p="name"]', r).value.trim(), qty:clampInt($('[data-p="qty"]', r).value, 1, 9999) || 1})).filter(p => p.name).slice(0, 40);
       const note = $("#f-note", w).value.trim(), label = $("#f-label", w).checked, t = now();
       const photo = ph ? await resolvePhoto(ph) : (item ? (item.photo || null) : null);
-      S.last.roomId = roomId; S.last.boxId = boxId || "";
+      S.last.roomId = roomId; S.last.boxId = boxId || ""; S.last.cat = cat;
       if (item){
-        await retry(() => S.db.doc("items/" + item.id).update({name, roomId, boxId, qty, parts:partsNew, note, photo, label, updatedAt:t, updatedBy:S.me.id}));
-        { const df = diffTxt([["nazwa", item.name, name], ["miejsce", placeTxt(item.roomId, item.boxId), placeTxt(roomId, boxId)], ["ilość", qtyOf(item), qty], ["zestaw", partsTxt(item.parts), partsTxt(partsNew)], ["uwagi", item.note, note], ["naklejka", item.label === true ? "jest" : "brak", label ? "jest" : "brak"], ["zdjęcie", item.photo ? "jest" : "brak", photo ? (photo === item.photo ? "jest" : "nowe") : "brak"]]);
+        await retry(() => S.db.doc("items/" + item.id).update({name, cat, roomId, boxId, qty, parts:partsNew, note, photo, label, updatedAt:t, updatedBy:S.me.id}));
+        { const df = diffTxt([["nazwa", item.name, name], ["kategoria", item.cat || "", cat], ["miejsce", placeTxt(item.roomId, item.boxId), placeTxt(roomId, boxId)], ["ilość", qtyOf(item), qty], ["zestaw", partsTxt(item.parts), partsTxt(partsNew)], ["uwagi", item.note, note], ["naklejka", item.label === true ? "jest" : "brak", label ? "jest" : "brak"], ["zdjęcie", item.photo ? "jest" : "brak", photo ? (photo === item.photo ? "jest" : "nowe") : "brak"]]);
           if (df) logEv("item", `${df.startsWith("miejsce:") && !df.includes("; ") ? "Przeniesiono" : "Zmieniono"}: ${name}`, {item:item.id, d:df}); }
         dropOldPhoto(ph, photo); toast("Zapisano.");
       } else {
-        const id = pickId(code), doc = {name, roomId, boxId, qty:Math.max(1, qty), parts:partsNew, note, photo, label, codes:[], createdAt:t, createdBy:S.me.id, updatedAt:t, updatedBy:S.me.id};
+        const id = pickId(code), doc = {name, cat, roomId, boxId, qty:Math.max(1, qty), parts:partsNew, note, photo, label, codes:[], createdAt:t, createdBy:S.me.id, updatedAt:t, updatedBy:S.me.id};
         await retry(() => S.db.doc("items/" + id).set(doc));
         logEv("item", `Dodano: ${name}${doc.qty > 1 ? ` ×${doc.qty}` : ""}`, {item:id, d:placeTxt(roomId, boxId)});
         S.items.set(id, {id, ...doc}); toast("Dodano: " + name);
         if (code) go(id);
-        else if (sub && sub.dataset.next) setTimeout(() => itemForm(null, {roomId, boxId:boxId || ""}), 0);
+        else if (sub && sub.dataset.next) setTimeout(() => itemForm(null, {roomId, boxId:boxId || "", cat}), 0);
         else scheduleRender();
       }
       return true;
@@ -1579,10 +1655,10 @@ function qrSheet(id){
 }
 async function exportCsv(){
   if (!S.downloads) return;
-  const rows = [["Kod", "Inne naklejki", "Nazwa", "Sztuk", "Dostępne", "Pomieszczenie", "Pudło", "Gdzie stoi pudło", "W zestawie", "Naklejka", "Uwagi", "Kto ma (jednostka, sztuk, od, termin)", "Braki i usterki"]];
+  const rows = [["Kod", "Inne naklejki", "Nazwa", "Kategoria", "Sztuk", "Dostępne", "Pomieszczenie", "Pudło", "Gdzie stoi pudło", "W zestawie", "Naklejka", "Uwagi", "Kto ma (jednostka, sztuk, od, termin)", "Braki i usterki"]];
   for (const e of labelCandidates().filter(x => x.kind === "item")){
     const i = S.items.get(e.id), r = S.rooms.get(i.roomId), b = i.boxId && S.boxes.get(i.boxId);
-    rows.push([fmtCode(i.id), arr(i.codes).map(fmtCode).join(", "), i.name, qtyOf(i), avail(i), r ? r.name : "", b ? b.name : "", b ? (b.place || "") : "", partsTxt(i.parts), i.label === true ? "tak" : i.label === false ? "nie" : "", i.note || "", loansOf(i.id).map(l => `${l.to}${unitTxt(l) ? ` – ${unitTxt(l)}` : ""} (${lq(l)} szt., od ${fmtDate(l.out)}${l.due ? `, do ${l.due}` : ""})`).join("; "), issuesOf(i.id).map(x => x.text).join("; ")]);
+    rows.push([fmtCode(i.id), arr(i.codes).map(fmtCode).join(", "), i.name, i.cat || "", qtyOf(i), avail(i), r ? r.name : "", b ? b.name : "", b ? (b.place || "") : "", partsTxt(i.parts), i.label === true ? "tak" : i.label === false ? "nie" : "", i.note || "", loansOf(i.id).map(l => `${l.to}${unitTxt(l) ? ` – ${unitTxt(l)}` : ""} (${lq(l)} szt., od ${fmtDate(l.out)}${l.due ? `, do ${l.due}` : ""})`).join("; "), issuesOf(i.id).map(x => x.text).join("; ")]);
   }
   const csv = rows.map(r => r.map(v => { const s = String(v ?? ""); return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(";")).join("\r\n");
   try { await S.downloads.save({filename:`spis-${todayYMD()}.csv`, data:"﻿" + csv}); }
@@ -2145,7 +2221,7 @@ function importForm(){
       prev.innerHTML = `<p class="muted">Czytam plik…</p>`;
       let rows; try { rows = await readSheetRows(f); } catch (err){ console.error(err); prev.innerHTML = `<p class="hint t-late">Nie udało się odczytać pliku. Zapisz go jako .xlsx.</p>`; return; }
       if (!rows.length){ prev.innerHTML = `<p class="hint t-late">Plik jest pusty.</p>`; return; }
-      const c = pickCols(Object.keys(rows[0]), [["name", [h => h.startsWith("nazwa")]], ["room", [h => h.startsWith("pomieszcz")]], ["box", [h => h.startsWith("pud") || h.startsWith("pojemn")]], ["qty", [h => h.startsWith("ilosc") || h.startsWith("szt") || h.startsWith("liczba")]], ["num", [h => h.startsWith("numer")]], ["parts", [h => h.startsWith("zestaw") || h.startsWith("w zestawie")]], ["note", [h => h.startsWith("uwag")]]]);
+      const c = pickCols(Object.keys(rows[0]), [["name", [h => h.startsWith("nazwa")]], ["cat", [h => h.startsWith("kategor")]], ["room", [h => h.startsWith("pomieszcz")]], ["box", [h => h.startsWith("pud") || h.startsWith("pojemn")]], ["qty", [h => h.startsWith("ilosc") || h.startsWith("szt") || h.startsWith("liczba")]], ["num", [h => h.startsWith("numer")]], ["parts", [h => h.startsWith("zestaw") || h.startsWith("w zestawie")]], ["note", [h => h.startsWith("uwag")]]]);
       if (!c.name || !c.room){ prev.innerHTML = `<p class="hint t-late">Brakuje kolumn „Nazwa” albo „Pomieszczenie”. Użyj szablonu.</p>`; return; }
       const roomBy = new Map(roomsArr().map(r => [norm(r.name).trim(), r]));
       st.rows = rows.map((r, k) => {
@@ -2155,11 +2231,11 @@ function importForm(){
         const box = room && boxName ? boxesIn(room.id).find(b => norm(b.name).trim() === norm(boxName).trim()) : null;
         const qty = Math.max(1, parseInt(g("qty"), 10) || 1), numbered = /^(tak|t|yes|y|1|x)$/i.test(g("num"));
         const err = !name ? "brak nazwy" : !room ? `nie ma pomieszczenia „${roomName}”` : (numbered && qty > 200 ? "za dużo sztuk do numerowania" : "");
-        return {line:k + 2, name, room, boxName, box, qty, numbered, parts:parsePartsText(g("parts")), note:g("note"), err};
+        return {line:k + 2, name, cat:g("cat").slice(0, 60), room, boxName, box, qty, numbered, parts:parsePartsText(g("parts")), note:g("note"), err};
       }).filter(Boolean);
       const ok = st.rows.filter(r => !r.err), errN = st.rows.length - ok.length, total = ok.reduce((s, r) => s + (r.numbered ? r.qty : 1), 0);
       const newBoxes = new Set(ok.filter(r => r.boxName && !r.box).map(r => r.room.id + "|" + norm(r.boxName)));
-      prev.innerHTML = `<div class="imp-wrap"><table class="imp-table"><thead><tr><th>#</th><th>Nazwa</th><th>Gdzie</th><th>Szt.</th><th>Status</th></tr></thead><tbody>${st.rows.slice(0, 300).map(r => `<tr${r.err ? ` class="t-late"` : ""}><td>${r.line}</td><td>${esc(r.name)}${r.parts.length ? `<div class="hint">${esc(r.parts.map(partTxt).join(", "))}</div>` : ""}</td><td>${esc([r.room ? r.room.name : "", r.boxName].filter(Boolean).join(" › "))}${r.boxName && !r.box && r.room ? ` <span class="hint">(nowe pudło)</span>` : ""}</td><td>${r.qty}${r.numbered ? " nr" : ""}</td><td>${r.err ? esc(r.err) : "OK"}</td></tr>`).join("")}</tbody></table></div>
+      prev.innerHTML = `<div class="imp-wrap"><table class="imp-table"><thead><tr><th>#</th><th>Nazwa</th><th>Gdzie</th><th>Szt.</th><th>Status</th></tr></thead><tbody>${st.rows.slice(0, 300).map(r => `<tr${r.err ? ` class="t-late"` : ""}><td>${r.line}</td><td>${esc(r.name)}${r.cat ? `<div class="hint">${esc(r.cat)}</div>` : ""}${r.parts.length ? `<div class="hint">${esc(r.parts.map(partTxt).join(", "))}</div>` : ""}</td><td>${esc([r.room ? r.room.name : "", r.boxName].filter(Boolean).join(" › "))}${r.boxName && !r.box && r.room ? ` <span class="hint">(nowe pudło)</span>` : ""}</td><td>${r.qty}${r.numbered ? " nr" : ""}</td><td>${r.err ? esc(r.err) : "OK"}</td></tr>`).join("")}</tbody></table></div>
         <p class="meta"><b>${total}</b> ${pl(total, "pozycja", "pozycje", "pozycji")} do dodania${newBoxes.size ? `, ${newBoxes.size} ${pl(newBoxes.size, "nowe pudło", "nowe pudła", "nowych pudeł")}` : ""}${errN ? `. <span class="t-late">${errN} ${pl(errN, "wiersz z błędem nie zostanie dodany", "wiersze z błędem nie zostaną dodane", "wierszy z błędem nie zostanie dodanych")}.</span>` : "."}</p>
         ${total ? `<div class="form-actions"><button type="button" class="btn btn-primary" id="imp-run">Dodaj ${total} ${pl(total, "pozycję", "pozycje", "pozycji")}</button></div>` : ""}`;
       const run = $("#imp-run", w); if (run) run.addEventListener("click", () => runImport(st.rows.filter(r => !r.err), run));
@@ -2180,12 +2256,14 @@ async function runImport(rows, btn){
       }
       const n = r.numbered ? r.qty : 1;
       for (let k = 1; k <= n; k++){
-        const id = newCode(), doc = {name:r.numbered ? `${r.name} nr ${k}` : r.name, roomId:r.room.id, boxId, qty:r.numbered ? 1 : r.qty, parts:r.parts, note:r.note, photo:null, label:false, numbered:r.numbered, codes:[], createdAt:t, createdBy:S.me.id, updatedAt:t, updatedBy:S.me.id};
+        const id = newCode(), doc = {name:r.numbered ? `${r.name} nr ${k}` : r.name, cat:r.cat || "", roomId:r.room.id, boxId, qty:r.numbered ? 1 : r.qty, parts:r.parts, note:r.note, photo:null, label:false, numbered:r.numbered, codes:[], createdAt:t, createdBy:S.me.id, updatedAt:t, updatedBy:S.me.id};
         await retry(() => S.db.doc("items/" + id).set(doc)); S.items.set(id, {id, ...doc});
         done++; tick(); if (done % 20 === 0) await new Promise(res => setTimeout(res, 400));
       }
     }
     logEv("import", `Zaimportowano z Excela: ${done} ${pl(done, "pozycję", "pozycje", "pozycji")}`, {});
+    { const known = catsList(), fresh = [...new Set(rows.map(r => r.cat).filter(c => c && !known.includes(c)))];
+      if (fresh.length && canFull()) try { await retry(() => S.db.doc("config/categories").set({list:[...known, ...fresh], updatedAt:now(), updatedBy:S.me.id})); } catch (e){ console.warn("kategorie", e); } }
     closeSheet(); toast(`Dodano ${done} ${pl(done, "pozycję", "pozycje", "pozycji")}. Naklejki wydrukujesz w Etykietach (filtr „bez naklejki”).`);
   } catch (e){ handleErr(e); btn.disabled = false; btn.textContent = `Dokończ (dodano ${done}/${total})`; }
 }
@@ -2194,12 +2272,14 @@ async function importTemplate(){
   try {
     await loadScript(XLSX_URL);
     const X = window.XLSX, r0 = roomsArr()[0];
-    const ex = r0 ? [["Namiot NS 10-osobowy", r0.name, "", 4, "tak", "maszty x2; śledzie x20; tropik", ""], ["Ławka", r0.name, "", 20, "nie", "", "drewniane"]] : [];
-    const ws = X.utils.aoa_to_sheet([["Nazwa", "Pomieszczenie", "Pudło", "Ilość", "Numerowane", "Zestaw", "Uwagi"], ...ex]);
-    ws["!cols"] = [{wch:32}, {wch:26}, {wch:24}, {wch:8}, {wch:12}, {wch:40}, {wch:30}];
+    const c0 = catsList();
+    const ex = r0 ? [["Namiot NS 10-osobowy", c0[0] || "", r0.name, "", 4, "tak", "maszty x2; śledzie x20; tropik", ""], ["Ławka", c0.find(c => /meble/i.test(c)) || "", r0.name, "", 20, "nie", "", "drewniane"]] : [];
+    const ws = X.utils.aoa_to_sheet([["Nazwa", "Kategoria", "Pomieszczenie", "Pudło", "Ilość", "Numerowane", "Zestaw", "Uwagi"], ...ex]);
+    ws["!cols"] = [{wch:32}, {wch:22}, {wch:26}, {wch:24}, {wch:8}, {wch:12}, {wch:40}, {wch:30}];
     const ref = X.utils.aoa_to_sheet([["Pomieszczenie", "Pudła w nim"], ...roomsArr().map(r => [r.name, boxesIn(r.id).map(b => b.name).join("; ")])]);
     ref["!cols"] = [{wch:30}, {wch:60}];
-    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Spis"); X.utils.book_append_sheet(wb, ref, "Pomieszczenia");
+    const cref = X.utils.aoa_to_sheet([["Kategorie"], ...catsList().map(c => [c])]); cref["!cols"] = [{wch:30}];
+    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Spis"); X.utils.book_append_sheet(wb, ref, "Pomieszczenia"); X.utils.book_append_sheet(wb, cref, "Kategorie");
     const out = X.write(wb, {bookType:"xlsx", type:"array"});
     await S.downloads.save({filename:"szablon-spisu.xlsx", data:new Blob([out], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})});
   } catch (e){ if (!e || e.code !== "declined"){ console.error(e); toast("Nie udało się przygotować szablonu.", "err"); } }
@@ -2243,7 +2323,7 @@ function parentHash(){
   if (k === "box") return S.rooms.has(e.roomId) ? e.roomId : "";
   return "";
 }
-function updateBack(r){ const sub = !!S.q.trim() || r.v === "code" || r.v === "archiwum"; const b = $("#back-btn"), br = $("#brand"); if (b) b.hidden = !sub; if (br) br.hidden = sub; }
+function updateBack(r){ const sub = !!S.q.trim() || r.v === "code" || r.v === "archiwum" || r.v === "kat"; const b = $("#back-btn"), br = $("#brand"); if (b) b.hidden = !sub; if (br) br.hidden = sub; }
 function actionSheet(title, acts){
   openSheet(title, `<div class="choice">${acts.filter(Boolean).map(a => `<button type="button" class="btn btn-big${a.danger ? " btn-ghost btn-danger" : ""}" data-act="${a.act}"${a.id ? ` data-id="${esc(a.id)}"` : ""}${a.ids ? ` data-ids="${esc(a.ids)}"` : ""}>${a.icon || ""}<span>${esc(a.label)}</span></button>`).join("")}</div>`, null, {noFocus:true});
 }
@@ -2646,7 +2726,7 @@ async function backupXlsx(){
     const X = window.XLSX, wb = X.utils.book_new(), dt = v => v ? new Date(v).toLocaleString("sv-SE").slice(0, 16) : "";
     const add = (name, head, rows, widths) => { const ws = X.utils.aoa_to_sheet([head, ...rows]); ws["!cols"] = (widths || head.map(() => 18)).map(w => ({wch:w})); X.utils.book_append_sheet(wb, ws, name); };
     const items = [...S.items.values()].sort(byName), arch = [...S.archived.values()].sort(byName);
-    add("Spis", ["Kod", "Inne naklejki", "Nazwa", "Sztuk", "Dostępne", "Pomieszczenie", "Pudło", "W zestawie", "Naklejka", "Uwagi", "Dodano"], items.map(i => [i.id, arr(i.codes).join(", "), i.name, qtyOf(i), avail(i), (S.rooms.get(i.roomId) || {}).name || "", (S.boxes.get(i.boxId) || {}).name || "", partsTxt(i.parts), i.label === true ? "tak" : i.label === false ? "nie" : "", i.note || "", dt(i.createdAt)]), [9, 14, 32, 7, 9, 22, 22, 34, 9, 30, 16]);
+    add("Spis", ["Kod", "Inne naklejki", "Nazwa", "Kategoria", "Sztuk", "Dostępne", "Pomieszczenie", "Pudło", "W zestawie", "Naklejka", "Uwagi", "Dodano"], items.map(i => [i.id, arr(i.codes).join(", "), i.name, i.cat || "", qtyOf(i), avail(i), (S.rooms.get(i.roomId) || {}).name || "", (S.boxes.get(i.boxId) || {}).name || "", partsTxt(i.parts), i.label === true ? "tak" : i.label === false ? "nie" : "", i.note || "", dt(i.createdAt)]), [9, 14, 32, 20, 7, 9, 22, 22, 34, 9, 30, 16]);
     add("Pomieszczenia", ["Kod", "Nazwa", "Opis", "Kolejność"], roomsArr().map(r => [r.id, r.name, r.note || "", r.order ?? ""]), [9, 28, 40, 10]);
     add("Pudła", ["Kod", "Nazwa", "Pomieszczenie", "Gdzie stoi", "Uwagi"], [...S.boxes.values()].sort(byName).map(b => [b.id, b.name, (S.rooms.get(b.roomId) || {}).name || "", b.place || "", b.note || ""]), [9, 28, 24, 24, 30]);
     add("Wypożyczenia", ["Przedmiot", "Kod", "Sztuk", "Jednostka", "Osoba", "E-mail", "Cel", "Wydano", "Używane do", "Zwrot do", "Status", "Zwrócono", "Oddał(a)", "Wydano bez", "Uwagi", "Uwagi do zwrotu"], S.loans.map(l => [loanName(l), l.itemId, lq(l), unitTxt(l), l.to || "", l.email || "", l.purpose || "", dt(l.out), l.useTo || "", l.due || "", l.open ? (isLate(l) ? "po terminie" : "wypożyczone") : "zwrócone", dt(l.back), l.returnedBy || "", partsTxt(l.partsMissing), l.note || "", l.backNote || ""]), [28, 9, 7, 22, 22, 24, 16, 16, 11, 11, 13, 16, 18, 20, 24, 30]);
@@ -2902,6 +2982,8 @@ document.addEventListener("click", e => {
     case "import-items": importForm(); break;
     case "imp-template": importTemplate(); break;
     case "units-edit": unitsForm(); break;
+    case "cats-edit": catsForm(); break;
+    case "cat-assign": catAssignSheet(b.dataset.f); break;
     case "label-toggle": { const i = S.items.get(id); if (i) (async () => { const v = i.label !== true; try { await retry(() => S.db.doc("items/" + id).update({label:v, updatedAt:now(), updatedBy:S.me.id})); logEv("label", `${v ? "Ma naklejkę" : "Brak naklejki"}: ${i.name}`, {item:id}); toast(v ? "Oznaczono: ma naklejkę." : "Oznaczono: brak naklejki. Wydrukujesz ją w Etykietach."); } catch (err){ handleErr(err); } })(); break; }
     case "photo": photoSheet(id); break;
     case "lab-nolabel": S.lab.noLabel = !S.lab.noLabel; render(); break;
@@ -3009,6 +3091,6 @@ async function boot(){
 }
 boot();
 </script>
-<script src="./prod.js?v=20261123-druz-pom"></script>
+<script src="./prod.js?v=20261123-kategorie"></script>
 
 </body></html>

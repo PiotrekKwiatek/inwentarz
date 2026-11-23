@@ -127,6 +127,7 @@
       var bx = i.boxId ? S.boxes.get(i.boxId) : null, rm = S.rooms.get(i.roomId || (bx && bx.roomId));
       if (rm){ e.r = rm.name; if (typeof rm.order === "number") e.ro = rm.order; }
       if (bx && bx.name) e.b = bx.name;
+      if (i.cat) e.k = i.cat;
       out[i.id] = e;
     });
     return out;
@@ -198,19 +199,29 @@
   }
   function dThumb(e){ return e.p ? '<img class="thumb" src="' + esc(INW_BLOB(e.p)) + '" data-blob="' + esc(e.p) + '" alt="" loading="lazy">' : '<span class="thumb ph">' + IC.item + '</span>'; }
   function availTxt(e){ return e.a > 0 ? (e.q > 1 ? "dostępne " + e.a + " z " + e.q : "dostępne") : "teraz niedostępne"; }
-  var NOROOM = "Bez pomieszczenia";
+  var NOROOM = "Bez pomieszczenia", NOCAT_D = "Bez kategorii";
   function roomOf(e){ return e.r || NOROOM; }
+  function catOf(e){ return e.k || NOCAT_D; }
   function locTxt(e, withRoom){ return [withRoom ? e.r : "", e.b ? "pudło: " + e.b : ""].filter(Boolean).join(" · "); }
+  // drużynowy przegląda sprzęt wg miejsca albo wg kategorii (zapamiętane w przeglądarce)
+  S.dBy = (function(){ try { return localStorage.getItem("inwh-dby") === "cat" ? "cat" : "room"; } catch (_){ return "room"; } })();
+  function keyOf(e){ return S.dBy === "cat" ? catOf(e) : roomOf(e); }
   function groupsOf(list){
-    var m = new Map();
-    list.forEach(function(e){ var k = roomOf(e); if (!m.has(k)) m.set(k, {name:k, o:e.r ? (typeof e.ro === "number" ? e.ro : 999) : 1e6, items:[]}); m.get(k).items.push(e); });
+    var m = new Map(), cl = typeof catsList === "function" ? catsList() : [];
+    list.forEach(function(e){
+      var k = keyOf(e), o;
+      if (S.dBy === "cat"){ var ix = e.k ? cl.indexOf(e.k) : -1; o = !e.k ? 1e6 : (ix >= 0 ? ix : 500); }
+      else o = e.r ? (typeof e.ro === "number" ? e.ro : 999) : 1e6;
+      if (!m.has(k)) m.set(k, {name:k, o:o, items:[]}); m.get(k).items.push(e);
+    });
     return Array.from(m.values()).sort(function(a, b){ return a.o - b.o || a.name.localeCompare(b.name, "pl", {numeric:true}); });
   }
   // które grupy drużynowy ma rozwinięte (zapamiętane w przeglądarce); domyślnie wszystkie zwinięte
-  S.dRoom = ""; S.dOpen = (function(){ try { var v = JSON.parse(localStorage.getItem("inwh-dopen") || "[]"); return new Set(Array.isArray(v) ? v : []); } catch (_){ return new Set(); } })();
+  S.dSel = {room:"", cat:""}; S.dOpen = (function(){ try { var v = JSON.parse(localStorage.getItem("inwh-dopen") || "[]"); return new Set(Array.isArray(v) ? v : []); } catch (_){ return new Set(); } })();
+  function openKey(name){ return S.dBy + ":" + name; }
   function saveDOpen(){ try { localStorage.setItem("inwh-dopen", JSON.stringify(Array.from(S.dOpen))); } catch (_){} }
   function dRow(e, withRoom){
-    var c = S.dcart.find(function(x){ return x.itemId === e.id; }), loc = locTxt(e, withRoom);
+    var c = S.dcart.find(function(x){ return x.itemId === e.id; }), loc = locTxt(e, withRoom || S.dBy === "cat");
     var btn = '<button type="button" class="cart-btn' + (c ? " on" : "") + '" data-act="d-add" data-id="' + e.id + '" aria-label="' + (c ? "We wniosku, zmień" : "Dodaj do wniosku") + ': ' + esc(e.n) + '">' + (c ? (e.q > 1 ? '<span class="cq">×' + c.qty + '</span>' : IC.check) : IC.plus) + '</button>';
     return '<div class="row-wrap"><button type="button" class="row" data-act="d-item" data-id="' + e.id + '">' + dThumb(e) + '<div class="row-main"><div class="row-title">' + esc(e.n) + '</div><div class="row-sub"><span class="chip ' + (e.a > 0 ? "ok" : "mute") + '">' + availTxt(e) + '</span>' + (loc ? ' <span class="d-loc">' + esc(loc) + '</span>' : "") + '</div></div></button>' + btn + '</div>';
   }
@@ -229,35 +240,37 @@
   function viewCatalog(focusId){
     var q = S.q.trim(), n = norm(q), cq = q.toUpperCase().replace(/[\s\-]/g, "");
     var all = catList(), base = all;
-    if (n) base = base.filter(function(e){ return norm(e.n).indexOf(n) >= 0 || norm(e.b || "").indexOf(n) >= 0 || (cq.length >= 3 && [e.id].concat(e.c || []).some(function(c){ return c.indexOf(cq) >= 0; })); });
+    if (n) base = base.filter(function(e){ return norm(e.n).indexOf(n) >= 0 || norm(e.b || "").indexOf(n) >= 0 || norm(e.k || "").indexOf(n) >= 0 || (cq.length >= 3 && [e.id].concat(e.c || []).some(function(c){ return c.indexOf(cq) >= 0; })); });
     if (S.dOnlyAvail) base = base.filter(function(e){ return e.a > 0; });
     base.sort(function(a, b){ return a.n.localeCompare(b.n, "pl", {numeric:true}); });
     if (focusId){ history.replaceState(null, "", location.pathname + location.search); setTimeout(function(){ dItem(focusId); }, 0); }
     var head = '<div class="head"><div class="head-text"><div class="eyebrow">Sprzęt hufca</div><h1>' + (q ? "Wyniki: " + esc(q) : "Co jest w magazynie") + '</h1></div></div>';
     if (!all.length) return head + '<div class="empty"><h2>Spis jest jeszcze pusty</h2><p>Biuro hufca jeszcze nie dodało sprzętu.</p></div>';
-    // filtr pomieszczeń: liczby uwzględniają wyszukiwanie i „Dostępne teraz”
-    var rooms = groupsOf(base), list = S.dRoom ? base.filter(function(e){ return roomOf(e) === S.dRoom; }) : base;
-    if (S.dRoom && !rooms.some(function(g){ return g.name === S.dRoom; })) rooms.push({name:S.dRoom, items:[]});
-    var groups = groupsOf(list), force = !!n || !!S.dRoom || groups.length === 1;
-    var allOpen = groups.length > 0 && groups.every(function(g){ return S.dOpen.has(g.name); });
-    var chips = rooms.length > 1 || S.dRoom ? '<div class="seg d-rooms" role="group" aria-label="Pomieszczenie"><button type="button" data-act="d-room" data-f="" aria-pressed="' + !S.dRoom + '">Wszędzie <span class="d-n">' + base.length + '</span></button>'
-      + rooms.map(function(g){ return '<button type="button" data-act="d-room" data-f="' + esc(g.name) + '" aria-pressed="' + (S.dRoom === g.name) + '">' + esc(g.name) + ' <span class="d-n">' + g.items.length + '</span></button>'; }).join("") + '</div>' : "";
+    // filtr pomieszczeń albo kategorii: liczby uwzględniają wyszukiwanie i „Dostępne teraz”
+    var sel = S.dSel[S.dBy] || "", rooms = groupsOf(base), list = sel ? base.filter(function(e){ return keyOf(e) === sel; }) : base;
+    if (sel && !rooms.some(function(g){ return g.name === sel; })) rooms.push({name:sel, items:[]});
+    var groups = groupsOf(list), force = !!n || !!sel || groups.length === 1;
+    var allOpen = groups.length > 0 && groups.every(function(g){ return S.dOpen.has(openKey(g.name)); });
+    var hasCats = all.some(function(e){ return e.k; });
+    var by = hasCats ? '<div class="seg d-by" role="group" aria-label="Układ listy"><button type="button" data-act="d-by" data-f="room" aria-pressed="' + (S.dBy === "room") + '">Wg miejsca</button><button type="button" data-act="d-by" data-f="cat" aria-pressed="' + (S.dBy === "cat") + '">Wg kategorii</button></div>' : "";
+    var chips = rooms.length > 1 || sel ? '<div class="seg d-rooms" role="group" aria-label="' + (S.dBy === "cat" ? "Kategoria" : "Pomieszczenie") + '"><button type="button" data-act="d-room" data-f="" aria-pressed="' + !sel + '">' + (S.dBy === "cat" ? "Wszystkie" : "Wszędzie") + ' <span class="d-n">' + base.length + '</span></button>'
+      + rooms.map(function(g){ return '<button type="button" data-act="d-room" data-f="' + esc(g.name) + '" aria-pressed="' + (sel === g.name) + '">' + esc(g.name) + ' <span class="d-n">' + g.items.length + '</span></button>'; }).join("") + '</div>' : "";
     var grp = function(g){
       var av = g.items.filter(function(e){ return e.a > 0; }).length;
-      return '<details class="d-grp" data-room="' + esc(g.name) + '"' + (force ? ' data-force="1" open' : S.dOpen.has(g.name) ? " open" : "") + '><summary><span class="d-grp-name">' + esc(g.name) + '</span><span class="d-grp-n">' + g.items.length + ' ' + pl(g.items.length, "rzecz", "rzeczy", "rzeczy") + (S.dOnlyAvail ? "" : ' · ' + (av === g.items.length ? (av === 1 ? "dostępna" : "wszystkie dostępne") : av + ' ' + pl(av, "dostępna", "dostępne", "dostępnych"))) + '</span><span class="d-grp-ic" aria-hidden="true"></span></summary>'
+      return '<details class="d-grp" data-room="' + esc(g.name) + '"' + (force ? ' data-force="1" open' : S.dOpen.has(openKey(g.name)) ? " open" : "") + '><summary><span class="d-grp-t"><span class="d-grp-name">' + esc(g.name) + '</span><span class="d-grp-n">' + g.items.length + ' ' + pl(g.items.length, "rzecz", "rzeczy", "rzeczy") + (S.dOnlyAvail ? "" : ' · ' + (av === g.items.length ? (av === 1 ? "dostępna" : "wszystkie dostępne") : av === 0 ? (g.items.length === 1 ? "teraz niedostępna" : "teraz wszystko zajęte") : av + ' ' + pl(av, "dostępna", "dostępne", "dostępnych"))) + '</span></span><span class="d-grp-ic" aria-hidden="true"></span></summary>'
         + '<div class="list">' + g.items.map(function(e){ return dRow(e, false); }).join("") + '</div></details>';
     };
     return head + '<p class="hint">Wybierz rzeczy przyciskiem + i wyślij wniosek. Biuro hufca odpowie, a status zobaczysz w zakładce „Moje wnioski”.</p>'
-      + '<div class="seg" role="group" aria-label="Filtr"><button type="button" data-act="d-only" data-f="0" aria-pressed="' + !S.dOnlyAvail + '">Wszystko</button><button type="button" data-act="d-only" data-f="1" aria-pressed="' + S.dOnlyAvail + '">Dostępne teraz</button></div>'
+      + '<div class="d-ctl"><div class="seg" role="group" aria-label="Filtr"><button type="button" data-act="d-only" data-f="0" aria-pressed="' + !S.dOnlyAvail + '">Wszystko</button><button type="button" data-act="d-only" data-f="1" aria-pressed="' + S.dOnlyAvail + '">Dostępne teraz</button></div>' + by + '</div>'
       + chips
-      + '<div class="d-bar"><p class="meta">' + list.length + ' ' + pl(list.length, "rzecz", "rzeczy", "rzeczy") + (groups.length > 1 ? ' w ' + groups.length + ' ' + pl(groups.length, "miejscu", "miejscach", "miejscach") : "") + '</p>'
+      + '<div class="d-bar"><p class="meta">' + list.length + ' ' + pl(list.length, "rzecz", "rzeczy", "rzeczy") + (groups.length > 1 ? (S.dBy === "cat" ? ' w ' + groups.length + ' ' + pl(groups.length, "kategorii", "kategoriach", "kategoriach") : ' w ' + groups.length + ' ' + pl(groups.length, "miejscu", "miejscach", "miejscach")) : "") + '</p>'
       + (!force && groups.length > 1 ? '<button type="button" class="btn btn-sm btn-ghost" data-act="d-openall" data-f="' + (allOpen ? "0" : "1") + '">' + (allOpen ? "Zwiń wszystko" : "Rozwiń wszystko") + '</button>' : "") + '</div>'
       + (list.length ? groups.map(grp).join("") : '<div class="empty"><h2>Nic nie pasuje</h2><p>Zmień wyszukiwanie albo filtr.</p></div>');
   }
   // zapamiętuj, które pomieszczenia drużynowy rozwinął (zdarzenie toggle nie „bąbelkuje”, więc łapiemy je w fazie przechwytywania)
   document.addEventListener("toggle", function(ev){
     var d = ev.target; if (!d || !d.classList || !d.classList.contains("d-grp") || d.dataset.force) return;
-    var k = d.dataset.room; if (d.open) S.dOpen.add(k); else S.dOpen.delete(k); saveDOpen();
+    var k = openKey(d.dataset.room); if (d.open) S.dOpen.add(k); else S.dOpen.delete(k); saveDOpen();
     var ta = document.querySelector('[data-act="d-openall"]'); if (!ta) return;
     var ds = Array.from(document.querySelectorAll(".d-grp")), allOpen = ds.length && ds.every(function(x){ return x.open; });
     ta.dataset.f = allOpen ? "0" : "1"; ta.textContent = allOpen ? "Zwiń wszystko" : "Rozwiń wszystko";
@@ -269,6 +282,7 @@
       + (e.p ? '<img class="d-photo" src="' + esc(INW_BLOB(e.p)) + '" data-blob="' + esc(e.p) + '" alt="">' : "")
       + '<p><span class="chip ' + (e.a > 0 ? "ok" : "mute") + '">' + availTxt(e) + '</span></p>'
       + (e.r || e.b ? '<p class="d-where"><b>Gdzie leży:</b> ' + esc(locTxt(e, true)) + '</p>' : "")
+      + (e.k ? '<p class="d-where"><b>Kategoria:</b> ' + esc(e.k) + '</p>' : "")
       + (e.a <= 0 ? '<p class="hint">Teraz wszystko jest wydane albo w naprawie. Możesz o to poprosić na późniejszy termin, biuro sprawdzi dostępność.</p>' : "")
       + (e.q > 1 ? '<div class="field"><label for="d-qty">Ile sztuk potrzebujesz?</label><input id="d-qty" class="inp qty-in" type="number" inputmode="numeric" min="1" max="' + e.q + '" value="' + (c ? c.qty : 1) + '"><p class="hint" id="d-qh"></p></div>' : "")
       + '<div class="form-actions">' + (c ? '<button type="button" class="btn btn-ghost btn-danger" data-act="d-rm" data-id="' + id + '">Usuń z wniosku</button>' : "") + '<span class="spacer"></span><button type="button" class="btn" data-act="close-sheet">Zamknij</button><button type="submit" class="btn btn-primary">' + (c ? "Zapisz" : "Dodaj do wniosku") + '</button></div></form>', function(w){
@@ -411,8 +425,9 @@
       case "inw-full": b.disabled = true; b.textContent = "Wczytuję…"; window.INW_FULL(); break;
       case "inw-reqs": S.lentFilter = "requests"; go("wypozyczone"); break;
       case "d-only": S.dOnlyAvail = b.dataset.f === "1"; render(); break;
-      case "d-room": S.dRoom = b.dataset.f || ""; render(); break;
-      case "d-openall": { var names = Array.from(document.querySelectorAll(".d-grp")).map(function(d){ return d.dataset.room; }); if (b.dataset.f === "1") names.forEach(function(k){ S.dOpen.add(k); }); else names.forEach(function(k){ S.dOpen.delete(k); }); saveDOpen(); render(); break; }
+      case "d-room": S.dSel[S.dBy] = b.dataset.f || ""; render(); break;
+      case "d-by": S.dBy = b.dataset.f === "cat" ? "cat" : "room"; try { localStorage.setItem("inwh-dby", S.dBy); } catch (_){} render(); break;
+      case "d-openall": { var names = Array.from(document.querySelectorAll(".d-grp")).map(function(d){ return openKey(d.dataset.room); }); if (b.dataset.f === "1") names.forEach(function(k){ S.dOpen.add(k); }); else names.forEach(function(k){ S.dOpen.delete(k); }); saveDOpen(); render(); break; }
       case "d-item": dItem(id); break;
       case "d-add": { var e2 = S.cat[id]; if (!e2) break; var c = S.dcart.find(function(x){ return x.itemId === id; }); if (e2.q > 1) dItem(id); else if (c){ S.dcart = S.dcart.filter(function(x){ return x.itemId !== id; }); saveDcart(); render(); toast("Usunięto z wniosku: " + e2.n); } else { S.dcart.push({itemId:id, qty:1}); saveDcart(); render(); toast("Dodano do wniosku: " + e2.n); } break; }
       case "d-rm": { S.dcart = S.dcart.filter(function(x){ return x.itemId !== id; }); saveDcart(); if (b.dataset.keep){ var w = $("#sheet"); if (w && w.refreshRows) w.refreshRows(); else closeSheet(); } else closeSheet(); render(); break; }
