@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Test logowania Microsoft – Inwentarz hufca</title>
+<link rel="icon" type="image/png" href="./icons/favicon.png">
+<style>
+  :root{--bg:#E9EDF0;--surface:#fff;--ink:#131C25;--ink-2:#45525E;--ink-3:#6B7783;--line:#D3DAE0;--accent:#F3C11A;--ok:#1E7A46;--ok-bg:#E3F3E9;--bad:#B3261E;--bad-bg:#FBE9E7;--warn:#8A5A00;--warn-bg:#FFF4D6}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:max(20px,env(safe-area-inset-top)) 16px 40px}
+  main{max-width:520px;margin:0 auto;display:grid;gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:grid;gap:12px}
+  h1{margin:0;font-size:24px;line-height:1.2}
+  h2{margin:0;font-size:18px}
+  p{margin:0;color:var(--ink-2)}
+  label{font-size:14px;font-weight:600;display:grid;gap:4px}
+  input{font:15px ui-monospace,SFMono-Regular,Menlo,monospace;padding:10px 12px;border:1px solid var(--line);border-radius:10px;width:100%;background:#fff;color:var(--ink)}
+  button{font-weight:600;font-size:16px;line-height:1;font-family:inherit;min-height:48px;border-radius:12px;border:1px solid #D9A800;background:var(--accent);color:var(--ink);cursor:pointer;padding:0 18px}
+  button.sec{background:#fff;border-color:var(--line);font-weight:500}
+  .res{border-radius:12px;padding:14px 16px;display:grid;gap:6px}
+  .res.ok{background:var(--ok-bg);color:var(--ok)}
+  .res.bad{background:var(--bad-bg);color:var(--bad)}
+  .res.warn{background:var(--warn-bg);color:var(--warn)}
+  .res b{font-size:17px}
+  .res p{color:inherit}
+  dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+  dt{color:var(--ink-3)} dd{margin:0;word-break:break-word}
+  code{font-size:13px;word-break:break-all}
+  .small{font-size:13px;color:var(--ink-3)}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Test logowania kontem Microsoft</h1>
+    <p>Sprawdza, czy konta ZHP mogą logować się do Inwentarza. Nic nie zapisuje i niczego nie zmienia na Twoim koncie: odczytuje tylko imię i adres e-mail.</p>
+  </div>
+  <div class="card" id="setup">
+    <h2>Dane aplikacji z Microsoft Entra</h2>
+    <label>Identyfikator aplikacji (klienta)<input id="cid" placeholder="np. 1a2b3c4d-…" autocomplete="off" spellcheck="false"></label>
+    <label>Identyfikator katalogu (dzierżawy)<input id="tid" placeholder="np. 5e6f7a8b-… (albo puste)" autocomplete="off" spellcheck="false"></label>
+    <p class="small">Oba znajdziesz w Entra na stronie „Przegląd” zarejestrowanej aplikacji. Nie są tajne. Adres przekierowania w rejestracji musi być dokładnie taki: <code id="ru"></code> (platforma: aplikacja jednostronicowa, SPA).</p>
+    <div class="row"><button id="go" type="button">Zaloguj się kontem Microsoft</button></div>
+  </div>
+  <div id="out" hidden></div>
+</main>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const REDIRECT = location.origin + location.pathname;
+  $("#ru").textContent = REDIRECT;
+  const qs = new URLSearchParams(location.search);
+  const saved = JSON.parse(localStorage.getItem("ms-test") || "{}");
+  $("#cid").value = qs.get("cid") || saved.cid || "";
+  $("#tid").value = qs.get("tid") || saved.tid || "";
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
+  const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const rand = n => b64url(crypto.getRandomValues(new Uint8Array(n)));
+  const authority = tid => `https://login.microsoftonline.com/${encodeURIComponent((tid || "organizations").trim())}/oauth2/v2.0`;
+  function show(kind, title, body){ const o = $("#out"); o.hidden = false; o.className = "card"; o.innerHTML = `<div class="res ${kind}"><b>${title}</b>${body || ""}</div><div class="row"><button class="sec" type="button" id="again">Spróbuj jeszcze raz</button></div>`; $("#again").onclick = () => { history.replaceState(null, "", REDIRECT); location.reload(); }; }
+  function explain(code, desc){
+    const d = `${code || ""} ${desc || ""}`;
+    if (/AADSTS90094|AADSTS90095|AADSTS65001|admin|consent_required|AADSTS900941|AADSTS900981/i.test(d)) return ["warn", "Potrzebna zgoda administratora ZHP", "Logowanie działa, ale ustawienia kont ZHP nie pozwalają samodzielnie wpuścić tej aplikacji. Musiałby ją zatwierdzić administrator Microsoft 365 w ZHP."];
+    if (/AADSTS50011/i.test(d)) return ["bad", "Zły adres przekierowania", `W rejestracji aplikacji adres przekierowania musi być dokładnie: ${REDIRECT}, platforma „Aplikacja jednostronicowa” (SPA).`];
+    if (/AADSTS9002326|AADSTS9002327/i.test(d)) return ["bad", "Zła platforma w rejestracji", "Adres przekierowania jest dodany jako „Sieć Web”, a musi być jako „Aplikacja jednostronicowa” (SPA). Zmień to w Uwierzytelnianie."];
+    if (/AADSTS700016/i.test(d)) return ["bad", "Nie znaleziono aplikacji", "Identyfikator aplikacji albo katalogu jest błędny albo aplikacja jest w innym katalogu niż konto, którym się logujesz."];
+    if (/AADSTS50020|AADSTS50194|AADSTS50128/i.test(d)) return ["bad", "Konto z innej organizacji", "Aplikacja przyjmuje tylko konta z katalogu, w którym ją zarejestrowano. Zaloguj się kontem ZHP albo zmień typ obsługiwanych kont."];
+    if (/AADSTS53003|AADSTS50105|AADSTS50158/i.test(d)) return ["warn", "Zablokowane przez zasady ZHP", "Konto jest poprawne, ale zasady dostępu w Microsoft 365 ZHP blokują tę aplikację. Potrzebny administrator ZHP."];
+    if (/access_denied|AADSTS65004/i.test(d)) return ["warn", "Odmówiono zgody", "Na ekranie zgody wybrano „Anuluj” albo zgoda nie została udzielona."];
+    return ["bad", "Logowanie się nie udało", "Prześlij zrzut tego ekranu, sprawdzę, co oznacza ten błąd."];
+  }
+
+  $("#go").onclick = async () => {
+    const cid = $("#cid").value.trim(), tid = $("#tid").value.trim();
+    if (!/^[0-9a-f-]{36}$/i.test(cid)){ show("bad", "Brak identyfikatora aplikacji", "<p>Wklej „Identyfikator aplikacji (klienta)” z Entra. Ma postać 8-4-4-4-12 znaków.</p>"); return; }
+    localStorage.setItem("ms-test", JSON.stringify({cid, tid}));
+    const verifier = rand(48), state = rand(16);
+    const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+    sessionStorage.setItem("ms-test-pkce", JSON.stringify({verifier, state, cid, tid}));
+    const p = new URLSearchParams({client_id:cid, response_type:"code", redirect_uri:REDIRECT, response_mode:"query", scope:"openid profile email User.Read", state, code_challenge:challenge, code_challenge_method:"S256", prompt:"select_account"});
+    location.assign(`${authority(tid)}/authorize?${p}`);
+  };
+
+  async function finish(){
+    const err = qs.get("error"), code = qs.get("code");
+    if (!err && !code) return;
+    const pk = JSON.parse(sessionStorage.getItem("ms-test-pkce") || "{}");
+    if (err){
+      const desc = qs.get("error_description") || "";
+      const [k, t, m] = explain(err, desc);
+      show(k, t, `<p>${esc(m)}</p><p class="small">Kod: <code>${esc(err)}</code><br>${esc(desc.split("\n")[0]).slice(0, 400)}</p>`);
+      history.replaceState(null, "", REDIRECT); return;
+    }
+    if (!pk.verifier || qs.get("state") !== pk.state){ show("bad", "Coś się pomieszało", "<p>Brak danych sesji. Kliknij „Spróbuj jeszcze raz”.</p>"); return; }
+    show("warn", "Kończę logowanie…", "");
+    try {
+      const r = await fetch(`${authority(pk.tid)}/token`, {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:new URLSearchParams({client_id:pk.cid, grant_type:"authorization_code", code, redirect_uri:REDIRECT, code_verifier:pk.verifier, scope:"openid profile email User.Read"})});
+      const j = await r.json();
+      if (!r.ok || !j.id_token){ const [k, t, m] = explain(j.error, j.error_description); show(k, t, `<p>${esc(m)}</p><p class="small">Kod: <code>${esc(j.error || r.status)}</code><br>${esc((j.error_description || "").split("\n")[0]).slice(0, 400)}</p>`); return; }
+      const c = JSON.parse(decodeURIComponent(escape(atob(j.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))));
+      let me = null;
+      if (j.access_token){ try { const g = await fetch("https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,jobTitle", {headers:{Authorization:"Bearer " + j.access_token}}); if (g.ok) me = await g.json(); } catch (_){} }
+      const mail = (me && (me.mail || me.userPrincipalName)) || c.email || c.preferred_username || "";
+      show("ok", "Działa! Konto ZHP może się logować", `<p>To znaczy, że w Inwentarzu da się zrobić logowanie kontem Microsoft bez proszenia IT ZHP.</p>
+        <dl><dt>Imię i nazwisko</dt><dd>${esc((me && me.displayName) || c.name || "—")}</dd><dt>E-mail</dt><dd>${esc(mail || "—")}</dd><dt>Katalog</dt><dd><code>${esc(c.tid || "—")}</code></dd><dt>Odczyt profilu</dt><dd>${me ? "tak" : "nie (tylko podstawowe dane)"}</dd></dl>`);
+    } catch (e){
+      show("bad", "Nie udało się dokończyć logowania", `<p>${esc(e.message || e)}</p><p class="small">Najczęściej to zła platforma w rejestracji: adres przekierowania musi być dodany jako „Aplikacja jednostronicowa” (SPA).</p>`);
+    } finally {
+      sessionStorage.removeItem("ms-test-pkce");
+      history.replaceState(null, "", REDIRECT);
+    }
+  }
+  finish();
+})();
+</script>
+</body>
+</html>
