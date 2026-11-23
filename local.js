@@ -1,4 +1,4 @@
-// Inwentarz hufca: wersja testowa, w której każdy ma własną kopię danych w swojej przeglądarce.
+// Wypożyczalnia Hufca: wersja testowa, w której każdy ma własną kopię danych w swojej przeglądarce.
 // Podstawia pod aplikację to samo API bazy, które ma w Claude (collection/doc/where/orderBy/limit/onSnapshot).
 (() => {
   const IDB = "inwentarz-test", KEY = "db", NAME_KEY = "inw-test-seen";

@@ -29,13 +29,13 @@ window.INW_BLOB = window.INW_BLOB || function(){ return ""; };
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Inwentarz">
+<meta name="apple-mobile-web-app-title" content="Wypożyczalnia">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#FFFFFF">
 <style>.inw-install{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}.inw-install b{font-size:15px}</style>
 </head><body>
 
-<title>Inwentarz hufca (wersja testowa)</title>
+<title>Wypożyczalnia Hufca (wersja testowa)</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("inw-theme")||"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -510,7 +510,7 @@ button.row{width:100%;text-align:left;font:inherit;color:inherit;background:var(
 </style>
 
 <header class="top"><div class="wrap top-in">
-  <button type="button" class="back-btn" id="back-btn" data-act="back" hidden><span class="bk-ic"></span><span class="bk-t">Wróć</span></button><a class="brand" id="brand" href="#" aria-label="Spis — strona główna"><span class="brand-mark" id="brand-mark"></span><span class="brand-name">Inwentarz</span></a>
+  <button type="button" class="back-btn" id="back-btn" data-act="back" hidden><span class="bk-ic"></span><span class="bk-t">Wróć</span></button><a class="brand" id="brand" href="#" aria-label="Spis — strona główna"><span class="brand-mark" id="brand-mark"></span><span class="brand-name">Wypożyczalnia</span></a>
   <div class="search"><span id="search-ic"></span><input id="q" type="search" placeholder="Szukaj: namiot, lina, kod…" autocomplete="off" enterkeyhint="search" aria-label="Szukaj w spisie"></div>
   <span class="ro" id="ro" hidden>Tylko podgląd</span><button type="button" class="ro role-btn" id="role-btn" data-act="role" title="Podgląd roli. Prawdziwe uprawnienia dojdą po przenosinach." hidden></button><button type="button" class="icon-btn theme-btn" id="theme-btn" data-act="theme" aria-label="Ciemny wygląd"></button><button type="button" class="icon-btn acct-btn" id="acct-btn" data-act="inw-acct" aria-label="Konto" hidden></button>
 </div></header>
@@ -2481,7 +2481,7 @@ async function tablePdf(o){
     let page = 0, y = 0;
     const cols = o.cols, tw = W - 2 * M, sumW = cols.reduce((s, c) => s + c.w, 0), cw = cols.map(c => c.w / sumW * tw);
     const flush = () => { pdf.addImage(cv.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, W, H, undefined, "FAST"); };
-    const footer = () => { F(400, 2.6); ctx.fillStyle = ink2; ctx.fillText(`${o.foot || "Inwentarz hufca"} · wygenerowano ${fmtDT(now())} · strona ${page}`, P(M), P(H - M + 4)); };
+    const footer = () => { F(400, 2.6); ctx.fillStyle = ink2; ctx.fillText(`${o.foot || "Wypożyczalnia Hufca"} · wygenerowano ${fmtDT(now())} · strona ${page}`, P(M), P(H - M + 4)); };
     const tableHead = () => { F(600, 2.8); ctx.fillStyle = band; ctx.fillRect(P(M), P(y), P(tw), P(7)); ctx.fillStyle = ink2; let x = M; cols.forEach((c, j) => { ctx.fillText(c.h, P(x + 1.6), P(y + 2.1)); x += cw[j]; }); y += 7; };
     const newPage = () => {
       if (page){ footer(); flush(); pdf.addPage("a4", "portrait"); }
@@ -2604,7 +2604,7 @@ async function backupXlsx(){
     add("Archiwum", ["Kod", "Nazwa", "Sztuk", "Było w", "Powód", "Notatka", "Spisano"], arch.map(i => [i.id, i.name, qtyOf(i), placeTxt(i.roomId, i.boxId), ARCH_LBL(i.archiveReason), i.archiveNote || "", dt(i.archivedAt)]), [9, 30, 7, 30, 20, 30, 16]);
     add("Dziennik", ["Kiedy", "Kto", "Rodzaj", "Co", "Szczegóły", "Jednostka"], S.log.map(g => [dt(g.at), g.who || "", LOG_LBL(g.k), g.txt || "", g.d || "", g.unit || ""]), [16, 20, 16, 40, 70, 22]);
     const out = X.write(wb, {bookType:"xlsx", type:"array"});
-    await S.downloads.save({filename:`inwentarz-kopia-${todayYMD()}.xlsx`, data:new Blob([out], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})});
+    await S.downloads.save({filename:`wypozyczalnia-kopia-${todayYMD()}.xlsx`, data:new Blob([out], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})});
     try { await retry(() => S.db.doc("config/backup").set({at:now(), by:S.me.id})); } catch (_){}
     toast("Kopia zapisana.");
   } catch (e){ if (!e || e.code !== "declined"){ console.error(e); toast("Nie udało się zrobić kopii.", "err"); } }
